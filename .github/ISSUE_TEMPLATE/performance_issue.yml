@@ -1,0 +1,126 @@
+name: Performance Issue
+description: Report performance problems like lag, crashes, or high resource usage
+title: "[Performance]: "
+labels: ["performance", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a performance issue! Please provide detailed information to help us investigate.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the performance issue you're experiencing
+      placeholder: The app becomes unresponsive when...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What kind of performance issue are you experiencing?
+      options:
+        - App crash
+        - UI lag/jank
+        - Slow loading
+        - High memory usage
+        - High CPU usage
+        - Battery drain
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this performance issue?
+      placeholder: |
+        1. Open the app
+        2. Navigate to '...'
+        3. Perform action '...'
+        4. Observe lag/crash
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequency
+      description: How often does this issue occur?
+      options:
+        - Always
+        - Often (>50% of the time)
+        - Sometimes (10-50% of the time)
+        - Rarely (<10% of the time)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which platform(s) are you experiencing this issue on?
+      multiple: true
+      options:
+        - iOS
+        - Android
+        - Web
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: flutter-version
+    attributes:
+      label: Flutter Version
+      description: Run `flutter --version` and paste the output
+      placeholder: "Flutter 3.x.x"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device/Emulator
+      description: What device or emulator are you using?
+      placeholder: "iPhone 15 Pro / Pixel 8"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build-mode
+    attributes:
+      label: Build Mode
+      description: Which build mode were you running?
+      options:
+        - Debug
+        - Profile
+        - Release
+    validations:
+      required: true
+
+  - type: textarea
+    id: profiling
+    attributes:
+      label: Profiling Data
+      description: If you've run Flutter DevTools profiler, paste relevant data here
+      render: shell
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Stack Trace
+      description: Please copy and paste any relevant log output or crash stack traces
+      render: shell
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the performance issue

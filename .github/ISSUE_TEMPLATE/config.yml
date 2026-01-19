@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/jukasdrj/wingtip/discussions
+    about: Please use GitHub Discussions for questions and general discussions
+  - name: Flutter Documentation
+    url: https://docs.flutter.dev
+    about: Official Flutter documentation and guides
