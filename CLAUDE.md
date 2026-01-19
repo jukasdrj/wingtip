@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Wingtip is a local-first, offline-capable library manager Flutter app that uses the camera to scan book spines. It connects to the Talaria backend for AI-powered book identification and enrichment, but stores all data locally in SQLite. The app follows a "Swiss Utility" design philosophy: high-contrast, clean, zero-elevation interfaces with OLED black backgrounds and 1px borders instead of shadows.
 
+**Platform Priority: iOS-first.** All development decisions, performance targets, and UX patterns should prioritize iOS. Android and web are secondary targets.
+
 ## Core Commands
 
 ### Build & Development
@@ -16,16 +18,19 @@ flutter pub get
 # Run code generation for Drift database
 flutter pub run build_runner build --delete-conflicting-outputs
 
-# Run the app
+# Run the app (defaults to connected device)
 flutter run
+
+# Run on iOS simulator
+flutter run -d iPhone
 
 # Run on specific device
 flutter run -d <device-id>
 
-# Build for iOS
-flutter build ios
+# Build for iOS (primary target)
+flutter build ios --release
 
-# Build for Android
+# Build for Android (secondary)
 flutter build apk
 ```
 
@@ -152,11 +157,15 @@ This app uses **Riverpod 3.x** for all state management:
 
 ### Haptic Feedback Strategy
 
+**iOS-focused haptic design** - haptics are critical to the Wingtip UX:
+
 - **Light Impact** - Shutter tap
 - **Medium Impact** - Book saved to database
 - **Heavy Impact** - Error or rate limit hit
 
 Trigger via `HapticFeedback.lightImpact()` etc.
+
+On iOS, these map to UIImpactFeedbackGenerator with different intensities. Android haptics are best-effort.
 
 ## Common Development Tasks
 
