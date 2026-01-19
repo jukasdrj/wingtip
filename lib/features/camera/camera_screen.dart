@@ -51,10 +51,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           // Mark as shown
           _shownErrorJobIds.add(job.id);
 
+          // Customize message for "no books detected" case
+          final displayMessage = job.errorMessage == 'No books detected in this image'
+              ? 'No books found. Try closer zoom or clearer angle.'
+              : job.errorMessage!;
+
           // Show error notification
           ErrorSnackBar.show(
             context,
-            message: job.errorMessage!,
+            message: displayMessage,
           );
         }
       }

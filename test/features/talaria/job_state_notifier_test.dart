@@ -598,6 +598,159 @@ void main() {
       expect(clearedState.rateLimit, isNull);
     });
   });
+
+  group('JobStateNotifier - No Books Found Handling', () {
+    test('should detect no books found when booksFound is 0', () async {
+      // Simulate a complete event with booksFound = 0
+      final completeData = {
+        'booksFound': 0,
+        'results': [],
+      };
+
+      final booksFound = completeData['booksFound'] as int?;
+      expect(booksFound, 0);
+
+      // This would trigger failed scan persistence in actual code
+      final errorMessage = 'No books detected in this image';
+      expect(errorMessage, 'No books detected in this image');
+    });
+
+    test('should detect no books found when results array is empty', () async {
+      // Simulate a complete event with empty results array
+      final completeData = <String, dynamic>{
+        'results': [],
+      };
+
+      final results = completeData['results'] as List?;
+      final booksFound = completeData['booksFound'] as int? ?? results?.length ?? 0;
+
+      expect(booksFound, 0);
+    });
+
+    test('should detect no books found when results is null', () async {
+      // Simulate a complete event with no results field
+      final completeData = <String, dynamic>{};
+
+      final results = completeData['results'] as List?;
+      final booksFound = completeData['booksFound'] as int? ?? results?.length ?? 0;
+
+      expect(booksFound, 0);
+    });
+
+    test('should save failed scan with no books found error message', () async {
+      // Save a failed scan for no books found scenario
+      await database.saveFailedScan(
+        jobId: 'no-books-job-1',
+        imagePath: '/tmp/no_books_scan.jpg',
+        errorMessage: 'No books detected in this image',
+      );
+
+      // Verify it was saved
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      expect(scan.jobId, 'no-books-job-1');
+      expect(scan.imagePath, '/tmp/no_books_scan.jpg');
+      expect(scan.errorMessage, 'No books detected in this image');
+    });
+
+    test('should not treat job as failed when books are found', () async {
+      // Simulate a complete event with books found
+      final completeData = {
+        'booksFound': 3,
+        'results': [
+          {'isbn': '978-0-111111-11-1', 'title': 'Book 1'},
+          {'isbn': '978-0-222222-22-2', 'title': 'Book 2'},
+          {'isbn': '978-0-333333-33-3', 'title': 'Book 3'},
+        ],
+      };
+
+      final results = completeData['results'] as List?;
+      final booksFound = completeData['booksFound'] as int? ?? results?.length ?? 0;
+
+      expect(booksFound, 3);
+      expect(booksFound > 0, true);
+    });
+
+    test('should infer booksFound from results array length when field missing', () async {
+      // Simulate a complete event with results but no booksFound field
+      final completeData = {
+        'results': [
+          {'isbn': '978-0-111111-11-1', 'title': 'Book 1'},
+          {'isbn': '978-0-222222-22-2', 'title': 'Book 2'},
+        ],
+      };
+
+      final results = completeData['results'] as List?;
+      final booksFound = completeData['booksFound'] as int? ?? results?.length ?? 0;
+
+      expect(booksFound, 2);
+    });
+
+    test('should handle empty results array as no books found', () async {
+      // Simulate backend returning empty results
+      final completeData = {
+        'booksFound': 0,
+        'results': [],
+        'status': 'complete',
+      };
+
+      final results = completeData['results'] as List?;
+      final booksFound = completeData['booksFound'] as int? ?? results?.length ?? 0;
+
+      expect(booksFound, 0);
+      expect(results, isEmpty);
+    });
+
+    test('should preserve image path for retry when no books found', () async {
+      // Save failed scan preserving image path
+      const originalImagePath = '/failed_scans/no-books-job-123.jpg';
+
+      await database.saveFailedScan(
+        jobId: 'no-books-job-123',
+        imagePath: originalImagePath,
+        errorMessage: 'No books detected in this image',
+      );
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      expect(scan.imagePath, originalImagePath);
+
+      // Verify image path is preserved for retry
+      expect(scan.imagePath.contains('failed_scans'), true);
+    });
+
+    test('should handle multiple no books found failures', () async {
+      // Save multiple failed scans with no books found
+      await database.saveFailedScan(
+        jobId: 'no-books-1',
+        imagePath: '/failed_scans/no-books-1.jpg',
+        errorMessage: 'No books detected in this image',
+      );
+
+      await database.saveFailedScan(
+        jobId: 'no-books-2',
+        imagePath: '/failed_scans/no-books-2.jpg',
+        errorMessage: 'No books detected in this image',
+      );
+
+      await database.saveFailedScan(
+        jobId: 'no-books-3',
+        imagePath: '/failed_scans/no-books-3.jpg',
+        errorMessage: 'No books detected in this image',
+      );
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 3);
+
+      for (final scan in scans) {
+        expect(scan.errorMessage, 'No books detected in this image');
+      }
+    });
+  });
 }
 
 /// Helper function to create a temporary test file

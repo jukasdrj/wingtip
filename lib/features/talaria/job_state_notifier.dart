@@ -337,6 +337,31 @@ class JobStateNotifier extends Notifier<JobState> {
         // Job completed successfully
         final resultData = event.data;
         debugPrint('[JobStateNotifier] Job $jobId completed: $resultData');
+
+        // Check if no books were detected
+        final results = resultData['results'] as List?;
+        final booksFound = resultData['booksFound'] as int? ?? results?.length ?? 0;
+
+        if (booksFound == 0) {
+          // No books detected - treat as a failed scan
+          debugPrint('[JobStateNotifier] No books detected in job $jobId');
+          HapticFeedback.heavyImpact();
+          _updateJob(
+            jobId,
+            job.copyWith(
+              status: JobStatus.error,
+              errorMessage: 'No books detected in this image',
+            ),
+          );
+          await _sseSubscriptions[jobId]?.cancel();
+          _sseSubscriptions.remove(jobId);
+
+          // Save failed scan to database
+          await _saveFailedScan(serverJobId, job.imagePath, 'No books detected in this image');
+          return;
+        }
+
+        // Books were found - normal completion
         _updateJob(
           jobId,
           job.copyWith(
