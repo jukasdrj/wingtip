@@ -18,6 +18,7 @@ import 'edit_book_screen.dart';
 import 'sort_options.dart';
 import 'widgets/empty_library_state.dart';
 import 'widgets/failed_scan_card.dart' as failed_card;
+import 'widgets/filter_bottom_sheet.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -98,6 +99,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           child: const Text('Cancel'),
         ),
       ),
+    );
+  }
+
+  void _showFilterOptions(BuildContext context) {
+    HapticFeedback.lightImpact();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) => const FilterBottomSheet(),
     );
   }
 
@@ -548,6 +560,64 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                       );
                     },
                   ),
+                ),
+                const SizedBox(width: 8),
+                // Advanced Filter Button
+                Consumer(
+                  builder: (context, ref, child) {
+                    final filterState = ref.watch(filterStateProvider);
+                    final hasFilters = filterState.hasActiveFilters;
+                    final filterCount = filterState.activeFilterCount;
+
+                    return OutlinedButton(
+                      onPressed: () => _showFilterOptions(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: hasFilters
+                            ? AppTheme.internationalOrange
+                            : AppTheme.textSecondary,
+                        side: BorderSide(
+                          color: hasFilters
+                              ? AppTheme.internationalOrange
+                              : AppTheme.borderGray,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(
+                            Icons.tune,
+                            size: 16,
+                          ),
+                          if (hasFilters)
+                            Positioned(
+                              right: -8,
+                              top: -8,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.internationalOrange,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  '$filterCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(width: 8),
                 // Sort Options

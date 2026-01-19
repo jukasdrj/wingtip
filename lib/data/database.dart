@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 import '../features/library/sort_options.dart';
+import '../features/library/filter_model.dart';
 
 part 'database.g.dart';
 
@@ -274,7 +275,79 @@ class AppDatabase extends _$AppDatabase {
     bool? reviewNeeded,
     bool sortReviewFirst = false,
     SortOption sortOption = SortOption.dateAddedNewest,
+    FilterState? filterState,
   }) {
+    // If we have advanced filters, use custom SQL for better control
+    if (filterState != null && filterState.hasActiveFilters) {
+      final whereClauses = <String>[];
+      final variables = <Variable>[];
+
+      // Review needed filter (legacy)
+      if (reviewNeeded != null) {
+        whereClauses.add('b.review_needed = ?');
+        variables.add(Variable.withBool(reviewNeeded));
+      }
+
+      // Review status filter (from FilterState)
+      if (filterState.reviewStatus != null) {
+        whereClauses.add('b.review_needed = ?');
+        variables.add(Variable.withBool(filterState.reviewStatus!.reviewNeededValue));
+      }
+
+      // Date range filter
+      if (filterState.dateRange != DateRange.allTime) {
+        if (filterState.dateRange == DateRange.custom) {
+          if (filterState.customStartDate != null) {
+            whereClauses.add('b.added_date >= ?');
+            variables.add(Variable.withInt(filterState.customStartDate!.millisecondsSinceEpoch));
+          }
+          if (filterState.customEndDate != null) {
+            whereClauses.add('b.added_date <= ?');
+            variables.add(Variable.withInt(filterState.customEndDate!.millisecondsSinceEpoch));
+          }
+        } else {
+          final startTimestamp = filterState.dateRange.getStartTimestamp();
+          if (startTimestamp != null) {
+            whereClauses.add('b.added_date >= ?');
+            variables.add(Variable.withInt(startTimestamp));
+          }
+        }
+      }
+
+      // Build WHERE clause
+      final whereClause = whereClauses.isNotEmpty
+          ? 'WHERE ${whereClauses.join(' AND ')}'
+          : '';
+
+      // Build ORDER BY clause
+      final orderByClause = _buildSqlOrderByClause(
+        sortOption: sortOption,
+        sortReviewFirst: sortReviewFirst,
+      );
+
+      final resultStream = customSelect(
+        '''SELECT b.* FROM books b
+           $whereClause
+           $orderByClause''',
+        variables: variables,
+        readsFrom: {books},
+      ).watch().map((rows) {
+        return rows.map((row) => books.map(row.data)).toList();
+      });
+
+      // Apply format filter in Dart (since format matching is complex)
+      if (filterState.format != null) {
+        return resultStream.map((booksList) {
+          return booksList.where((book) {
+            return filterState.format!.matches(book.format);
+          }).toList();
+        });
+      }
+
+      return resultStream;
+    }
+
+    // Use simple query builder for no filters
     final query = select(books);
 
     if (reviewNeeded != null) {
@@ -314,12 +387,14 @@ class AppDatabase extends _$AppDatabase {
     bool? reviewNeeded,
     bool sortReviewFirst = false,
     SortOption sortOption = SortOption.dateAddedNewest,
+    FilterState? filterState,
   }) {
-    if (query.isEmpty) {
+    if (query.isEmpty && (filterState == null || !filterState.hasActiveFilters)) {
       return watchAllBooks(
         reviewNeeded: reviewNeeded,
         sortReviewFirst: sortReviewFirst,
         sortOption: sortOption,
+        filterState: filterState,
       );
     }
 
@@ -331,10 +406,55 @@ class AppDatabase extends _$AppDatabase {
         .replaceAll(':', '')
         .replaceAll('-', ' ');
 
-    // Build WHERE clause
-    final whereClause = reviewNeeded != null
-        ? 'WHERE books_fts MATCH ? AND b.review_needed = ?'
-        : 'WHERE books_fts MATCH ?';
+    // Build WHERE clause components
+    final whereClauses = <String>[];
+    final variables = <Variable>[];
+
+    // Add FTS search if query is not empty
+    if (query.isNotEmpty) {
+      whereClauses.add('books_fts MATCH ?');
+      variables.add(Variable.withString('$escapedQuery*'));
+    }
+
+    // Add review needed filter
+    if (reviewNeeded != null) {
+      whereClauses.add('b.review_needed = ?');
+      variables.add(Variable.withBool(reviewNeeded));
+    }
+
+    // Add advanced filters
+    if (filterState != null) {
+      // Review status filter
+      if (filterState.reviewStatus != null) {
+        whereClauses.add('b.review_needed = ?');
+        variables.add(Variable.withBool(filterState.reviewStatus!.reviewNeededValue));
+      }
+
+      // Date range filter
+      if (filterState.dateRange != DateRange.allTime) {
+        if (filterState.dateRange == DateRange.custom) {
+          if (filterState.customStartDate != null) {
+            whereClauses.add('b.added_date >= ?');
+            variables.add(Variable.withInt(filterState.customStartDate!.millisecondsSinceEpoch));
+          }
+          if (filterState.customEndDate != null) {
+            whereClauses.add('b.added_date <= ?');
+            variables.add(Variable.withInt(filterState.customEndDate!.millisecondsSinceEpoch));
+          }
+        } else {
+          final startTimestamp = filterState.dateRange.getStartTimestamp();
+          if (startTimestamp != null) {
+            whereClauses.add('b.added_date >= ?');
+            variables.add(Variable.withInt(startTimestamp));
+          }
+        }
+      }
+    }
+
+    // Build final WHERE clause
+    final whereClause = whereClauses.isNotEmpty
+        ? 'WHERE ${whereClauses.join(' AND ')}'
+        : '';
 
     // Build ORDER BY clause
     final orderByClause = _buildSqlOrderByClause(
@@ -342,15 +462,15 @@ class AppDatabase extends _$AppDatabase {
       sortReviewFirst: sortReviewFirst,
     );
 
-    // Build variables list
-    final variables = reviewNeeded != null
-        ? [Variable.withString('$escapedQuery*'), Variable.withBool(reviewNeeded)]
-        : [Variable.withString('$escapedQuery*')];
+    // Build FROM clause - include FTS join only if searching
+    final fromClause = query.isNotEmpty
+        ? '''FROM books b
+           INNER JOIN books_fts fts ON b.rowid = fts.rowid'''
+        : 'FROM books b';
 
     // Use FTS5 MATCH query with prefix matching
-    return customSelect(
-      '''SELECT b.* FROM books b
-         INNER JOIN books_fts fts ON b.rowid = fts.rowid
+    final resultStream = customSelect(
+      '''SELECT b.* $fromClause
          $whereClause
          $orderByClause''',
       variables: variables,
@@ -358,6 +478,17 @@ class AppDatabase extends _$AppDatabase {
     ).watch().map((rows) {
       return rows.map((row) => books.map(row.data)).toList();
     });
+
+    // Apply format filter in Dart (since format matching is complex)
+    if (filterState?.format != null) {
+      return resultStream.map((booksList) {
+        return booksList.where((book) {
+          return filterState!.format!.matches(book.format);
+        }).toList();
+      });
+    }
+
+    return resultStream;
   }
 
   Future<List<Book>> searchBooksOnce(

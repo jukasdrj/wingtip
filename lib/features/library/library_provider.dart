@@ -4,6 +4,7 @@ import '../../data/database.dart';
 import '../../data/database_provider.dart';
 import 'sort_options.dart';
 import 'sort_service.dart';
+import 'filter_model.dart';
 
 // Search query notifier
 class SearchQueryNotifier extends Notifier<String> {
@@ -55,6 +56,42 @@ final sortReviewFirstProvider = NotifierProvider<SortReviewFirstNotifier, bool>(
   SortReviewFirstNotifier.new,
 );
 
+// Filter state notifier - persists during session only
+class FilterStateNotifier extends Notifier<FilterState> {
+  @override
+  FilterState build() => const FilterState();
+
+  void setFormat(BookFormat? format) {
+    state = state.copyWith(
+      format: format,
+      clearFormat: format == null,
+    );
+  }
+
+  void setReviewStatus(ReviewStatus? reviewStatus) {
+    state = state.copyWith(
+      reviewStatus: reviewStatus,
+      clearReviewStatus: reviewStatus == null,
+    );
+  }
+
+  void setDateRange(DateRange dateRange, {DateTime? customStart, DateTime? customEnd}) {
+    state = state.copyWith(
+      dateRange: dateRange,
+      customStartDate: customStart,
+      customEndDate: customEnd,
+    );
+  }
+
+  void clearFilters() {
+    state = state.clear();
+  }
+}
+
+final filterStateProvider = NotifierProvider<FilterStateNotifier, FilterState>(
+  FilterStateNotifier.new,
+);
+
 // Sort service provider
 final sortServiceProvider = FutureProvider<SortService>((ref) async {
   final prefs = await SharedPreferences.getInstance();
@@ -87,6 +124,7 @@ final booksProvider = StreamProvider<List<Book>>((ref) {
   final reviewNeededFilter = ref.watch(reviewNeededFilterProvider);
   final sortReviewFirst = ref.watch(sortReviewFirstProvider);
   final sortOptionAsync = ref.watch(sortOptionProvider);
+  final filterState = ref.watch(filterStateProvider);
 
   // Use the sort option value when available, otherwise use default
   final sortOption = sortOptionAsync.when(
@@ -100,6 +138,7 @@ final booksProvider = StreamProvider<List<Book>>((ref) {
     reviewNeeded: reviewNeededFilter,
     sortReviewFirst: sortReviewFirst,
     sortOption: sortOption,
+    filterState: filterState,
   );
 });
 
