@@ -69,6 +69,13 @@ dependencies:
   cached_network_image: ^3.3.0
   flutter_cache_manager: ^3.4.1
 
+  # CSV export
+  csv: ^6.0.0
+  intl: ^0.20.0
+
+  # File sharing
+  share_plus: ^10.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

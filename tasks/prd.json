@@ -1,0 +1,623 @@
+{
+  "name": "Project Wingtip",
+  "description": "A local-first, offline-capable library manager that uses the camera to scan book spines and enriches them via the Talaria backend",
+  "branchName": "ralph/wingtip-mvp",
+  "userStories": [
+    {
+      "id": "US-101",
+      "title": "Initialize Flutter Project with Riverpod & Drift",
+      "description": "As a developer, I want to scaffold the app with the latest Flutter stack so that I have a stable foundation for state and data.",
+      "acceptanceCriteria": [
+        "Project created with com.ooheynerds.wingtip package name",
+        "flutter_riverpod (v3) installed and ProviderScope configured in main.dart",
+        "drift (v2) installed with sqlite3_flutter_libs for native performance",
+        "Folder structure created: features/, core/, data/",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully (even if no tests yet)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-102",
+      "title": "Implement Swiss Utility Theme System",
+      "description": "As a user, I want to experience a high-contrast, clean interface so that the app feels precise and professional.",
+      "acceptanceCriteria": [
+        "Theme mode locked to Dark with OLED black (#000000) background",
+        "JetBrains Mono font configured for numbers/IDs, Inter for body text",
+        "ThemeData uses 1px solid borders instead of shadows (elevation set to 0)",
+        "Accent color defined as #FF3B30 (International Orange)",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-101"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-103",
+      "title": "Generate & Store Persistent Device ID",
+      "description": "As a system, I want to generate a UUID v4 on first launch so that I can authenticate with the Talaria backend.",
+      "acceptanceCriteria": [
+        "On first run, generate uuid.v4() using uuid package",
+        "Store securely in FlutterSecureStorage with key 'device_id'",
+        "Create DeviceIdProvider that reads from secure storage",
+        "Add debug setting UI to regenerate device ID",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with unit tests for device ID generation"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-101"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-116",
+      "title": "Drift Database Schema",
+      "description": "As a developer, I want to define the Books table so that I can store metadata efficiently.",
+      "acceptanceCriteria": [
+        "Create Books table with columns: isbn (TEXT PRIMARY KEY), title (TEXT), author (TEXT), coverUrl (TEXT NULLABLE), format (TEXT NULLABLE), addedDate (INTEGER), spineConfidence (REAL NULLABLE)",
+        "Create index on addedDate descending for default sort",
+        "Run drift build_runner to generate database code",
+        "Create FailedScans table with: id, jobId, imagePath, errorMessage, createdAt, expiresAt",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with database tests"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-101"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-104",
+      "title": "Offline-First Network Client",
+      "description": "As a system, I want to queue requests when offline so that I don't lose scans if the network drops.",
+      "acceptanceCriteria": [
+        "Configure Dio with connection retry interceptor (3 retries with exponential backoff)",
+        "Add connectivity_plus package and implement network status detection",
+        "Create NetworkStatusProvider using Riverpod",
+        "Show 'OFFLINE' tag in top-right corner when disconnected (Swiss style: small text, 1px white border)",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with network client tests"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-103"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-105",
+      "title": "Instant Camera Initialization",
+      "description": "As a user, I want to see the camera immediately upon opening the app so that I can capture a book spine instantly.",
+      "acceptanceCriteria": [
+        "App launches directly to CameraScreen widget",
+        "Camera initializes in background during splash",
+        "Cold start to live camera feed measures < 1.0s (add performance logging)",
+        "System status bar hidden for full immersion",
+        "flutter analyze shows no errors",
+        "Manual verification: Cold start performance < 1.0s"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-101",
+        "US-102"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-106",
+      "title": "Non-Blocking Shutter Action",
+      "description": "As a user, I want to tap the shutter button repeatedly without waiting so that I can scan a whole shelf in seconds.",
+      "acceptanceCriteria": [
+        "Shutter button renders as large white ring at bottom center (80x80px)",
+        "On tap: HapticFeedback.lightImpact() triggers immediately",
+        "On tap: Full-screen white flash overlay (100ms duration, opacity animation)",
+        "Shutter button remains enabled during processing (no loading spinner on button)",
+        "flutter analyze shows no errors",
+        "Manual verification: Rapid tapping works without blocking"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-105"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-107",
+      "title": "Background Image Processing",
+      "description": "As a system, I want to compress and resize images in a background Isolate so that the UI thread never janks.",
+      "acceptanceCriteria": [
+        "Use compute() to spawn isolate for image manipulation",
+        "Resize image to max 1920px on longest dimension",
+        "Compress to JPEG quality 85",
+        "Save temporary file to platform temp directory",
+        "Add performance logging to verify processing time < 500ms",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with image processing tests"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-106"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-110",
+      "title": "Upload Image to Talaria",
+      "description": "As a system, I want to POST the image to /v3/jobs/scans so that I can start the analysis pipeline.",
+      "acceptanceCriteria": [
+        "Create TalariaClient with Dio for multipart upload",
+        "POST processed JPEG to /v3/jobs/scans endpoint",
+        "Handle 202 Accepted response correctly",
+        "Parse jobId and streamUrl from JSON response",
+        "Update UI state to 'Listening' via Riverpod provider",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with HTTP client mocking tests"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-107",
+        "US-103"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-111",
+      "title": "SSE Stream Listener",
+      "description": "As a system, I want to listen to Server-Sent Events for a specific Job ID so that I receive real-time updates.",
+      "acceptanceCriteria": [
+        "Open SSE connection to streamUrl using fetch_client or http package",
+        "Maintain connection until 'complete' event or 5-minute timeout",
+        "Parse incoming JSON chunks for events: progress, result, complete, error",
+        "Handle connection errors with exponential backoff retry (max 3 retries)",
+        "Close connection properly on complete or error",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with SSE stream tests"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-110"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-113",
+      "title": "Handle Result Events - Data Upsert",
+      "description": "As a system, I want to save incoming book data immediately so that the user sees results before the job finishes.",
+      "acceptanceCriteria": [
+        "Listen for 'event: result' from SSE stream",
+        "Map JSON payload to Drift Book entity",
+        "Execute INSERT OR REPLACE into books table (deduplicate by ISBN)",
+        "Trigger HapticFeedback.mediumImpact() on successful save",
+        "Prefetch cover image URL to cached_network_image cache",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with data upsert tests"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-111",
+        "US-116"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-114",
+      "title": "Handle Complete & Cleanup",
+      "description": "As a system, I want to clean up resources when a job finishes so that I don't waste storage or battery.",
+      "acceptanceCriteria": [
+        "Listen for 'event: complete' from SSE stream",
+        "Send DELETE request to /v3/jobs/scans/{jobId}/cleanup",
+        "Delete local temporary JPEG file from temp directory",
+        "Close SSE connection cleanly",
+        "Update job state to 'completed' in UI",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with cleanup tests"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-111"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-117",
+      "title": "Library Grid View",
+      "description": "As a user, I want to see my books in a clean grid so that I can browse my collection.",
+      "acceptanceCriteria": [
+        "Create 3-column GridView of book covers using GridView.builder",
+        "Set aspect ratio to 1:1.5 for standard book proportions",
+        "Show grey fallback card with Title/Author in JetBrains Mono if no coverUrl",
+        "Implement infinite scroll with lazy loading from Drift database",
+        "Add 1px white borders to each card (Swiss style)",
+        "flutter analyze shows no errors",
+        "Manual verification: Grid displays correctly with and without cover images"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-116",
+        "US-102"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-108",
+      "title": "The Processing Stack UI",
+      "description": "As a user, I want to see my active uploads as a queue so that I know the system is working.",
+      "acceptanceCriteria": [
+        "Create horizontal ListView above shutter button for active jobs",
+        "Each job renders as 40x60px thumbnail of captured image",
+        "Apply colored borders: Yellow (Uploading), Blue (Analyzing), Green (Done)",
+        "Auto-remove job card after 5 seconds in 'Done' state with fade animation",
+        "Show job count badge when queue has items",
+        "flutter analyze shows no errors",
+        "Manual verification: Queue UI updates correctly during scan workflow"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-107"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-109",
+      "title": "Manual Focus & Zoom",
+      "description": "As a user, I want to pinch to zoom and tap to focus so that I can capture small text on spines.",
+      "acceptanceCriteria": [
+        "Implement pinch gesture detector for camera zoom (1x - 4x range)",
+        "Implement tap gesture detector to set camera focus point",
+        "Show square bracket cursor [ ] at tap location for 1 second (Swiss style)",
+        "Zoom level indicator shows current zoom (e.g., '2.5x') in top corner",
+        "flutter analyze shows no errors",
+        "Manual verification: Pinch zoom and tap focus work smoothly"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-105"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-112",
+      "title": "Visualize Progress Events",
+      "description": "As a user, I want to see text updates as the AI thinks so that I feel the speed of the system.",
+      "acceptanceCriteria": [
+        "Listen for 'event: progress' from SSE stream",
+        "Overlay transparent text on job thumbnail in processing queue",
+        "Display stage messages: 'Looking...', 'Reading...', 'Enriching...'",
+        "Use JetBrains Mono font for status text",
+        "Animate text fade in/out transitions (200ms)",
+        "flutter analyze shows no errors",
+        "Manual verification: Progress text updates appear during scan"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-111",
+        "US-108"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-115",
+      "title": "Handle Global Rate Limits",
+      "description": "As a user, I want to know if I've hit the daily limit so that I don't waste time snapping photos.",
+      "acceptanceCriteria": [
+        "Intercept HTTP 429 Too Many Requests response",
+        "Parse retryAfterMs from response headers or body",
+        "Disable shutter button when rate limited",
+        "Show countdown timer overlay: 'LIMIT REACHED. RESETS IN HH:MM:SS'",
+        "Re-enable shutter when countdown expires",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with rate limit handling tests"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-110"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-118",
+      "title": "Real-time List Updates",
+      "description": "As a user, I want to see new books pop in automatically so that I don't have to pull-to-refresh.",
+      "acceptanceCriteria": [
+        "Use Drift's watch() method to create stream of book updates",
+        "Connect stream to Riverpod StreamProvider",
+        "Library grid listens to provider and rebuilds automatically",
+        "Animate new items with fade in + slide up (200ms duration)",
+        "flutter analyze shows no errors",
+        "Manual verification: New books appear automatically after scan"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-117"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-119",
+      "title": "Full-Text Search (FTS5)",
+      "description": "As a user, I want to search my library instantly so that I can find a specific book.",
+      "acceptanceCriteria": [
+        "Enable FTS5 module in Drift database configuration",
+        "Create FTS5 virtual table for books (title, author, isbn)",
+        "Add search TextField at top of Library view",
+        "Implement search query that filters on title, author, and isbn",
+        "Results update as user types with < 100ms latency",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with FTS5 search tests"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-116",
+        "US-117"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-122",
+      "title": "Minimal Book Detail View",
+      "description": "As a user, I want to tap a book to see its data so that I can verify the scan.",
+      "acceptanceCriteria": [
+        "Create modal bottom sheet that opens on book card tap",
+        "Bottom sheet draggable to full screen",
+        "Layout: Large cover image on left, metadata fields on right (passport style)",
+        "Display fields: ISBN (JetBrains Mono), Title (bold), Author, Format",
+        "Add Edit button to allow manual field correction",
+        "flutter analyze shows no errors",
+        "Manual verification: Bottom sheet UI matches Swiss Utility design"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-117",
+        "US-102"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-125",
+      "title": "Haptic Feedback Strategy",
+      "description": "As a user, I want to feel the app working so that I don't have to look at the screen constantly.",
+      "acceptanceCriteria": [
+        "Shutter tap: HapticFeedback.lightImpact()",
+        "Scan success (result event): HapticFeedback.mediumImpact()",
+        "Error or retry needed: HapticFeedback.heavyImpact()",
+        "Verify haptics work on both iOS and Android",
+        "flutter analyze shows no errors",
+        "Manual verification: Haptic patterns are distinct and appropriate"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-106",
+        "US-113"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-128",
+      "title": "Permission Priming",
+      "description": "As a user, I want to understand why you need camera access so that I trust the app.",
+      "acceptanceCriteria": [
+        "Before requesting camera permission, show full-screen primer slide",
+        "Display text: 'Wingtip needs your camera to see books. Images are processed and deleted instantly.'",
+        "Add 'Grant Access' button that triggers OS permission prompt",
+        "Handle permission denied state gracefully",
+        "flutter analyze shows no errors",
+        "Manual verification: Permission flow works on both iOS and Android"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-105"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-130",
+      "title": "Error Toasts (Snackbars)",
+      "description": "As a user, I want to see errors without them blocking me so that I can keep scanning.",
+      "acceptanceCriteria": [
+        "Create custom SnackBar widget matching Swiss Utility design",
+        "Black background, white text, #FF3B30 red left border (4px width)",
+        "Display at bottom of screen, floating above content",
+        "Dismiss on tap or after 4 seconds",
+        "flutter analyze shows no errors",
+        "Manual verification: Error snackbar matches design spec"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-102"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-120",
+      "title": "Review Needed Indicator",
+      "description": "As a user, I want to see which books had low confidence so that I can manually check them.",
+      "acceptanceCriteria": [
+        "Check for 'review_needed' flag in book data from backend",
+        "Overlay small yellow triangle warning icon on book cover (top-right corner)",
+        "Add 'Needs Review' filter option in library",
+        "Implement 'Needs Review First' sort option",
+        "flutter analyze shows no errors",
+        "Manual verification: Review indicator displays correctly"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [
+        "US-117",
+        "US-113"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-121",
+      "title": "Export Data to CSV",
+      "description": "As a user, I want to export my library so that I own my data.",
+      "acceptanceCriteria": [
+        "Add 'Export Library' button in settings screen",
+        "Generate CSV with headers: ISBN, Title, Author, Format, Added Date, Cover URL",
+        "Filename format: wingtip_library_YYYY-MM-DD.csv",
+        "Open system share sheet for file sharing (Files, AirDrop, etc.)",
+        "flutter analyze shows no errors",
+        "Manual verification: CSV export contains all book data correctly formatted"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-116"
+      ]
+    },
+    {
+      "id": "US-124",
+      "title": "Swipe to Delete",
+      "description": "As a user, I want to remove bad scans easily so that my library stays clean.",
+      "acceptanceCriteria": [
+        "Long-press on book card enters 'Select Mode' with checkboxes",
+        "Allow multi-select of books in Select Mode",
+        "Show trash icon in app bar when items selected",
+        "Display confirmation dialog: 'Delete X books?' before deletion",
+        "Execute batch delete from database on confirmation",
+        "flutter analyze shows no errors",
+        "Manual verification: Multi-select and delete flow works smoothly"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-117"
+      ]
+    },
+    {
+      "id": "US-126",
+      "title": "Cache Manager",
+      "description": "As a user, I want to clear cached cover images so that the app doesn't eat up my storage.",
+      "acceptanceCriteria": [
+        "Add 'Clear Image Cache' option in settings screen",
+        "Use DefaultCacheManager.emptyCache() to clear cached_network_image cache",
+        "Display current cache size in settings (e.g., 'Cache: 124 MB')",
+        "Show confirmation toast after cache cleared",
+        "flutter analyze shows no errors",
+        "Manual verification: Cache size updates and images re-download after clear"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-117"
+      ]
+    },
+    {
+      "id": "US-127",
+      "title": "App Icon & Splash Screen",
+      "description": "As a user, I want to recognize the app on my home screen so that I can launch it quickly.",
+      "acceptanceCriteria": [
+        "Design and implement app icon: Abstract white wing glyph on black background",
+        "Create adaptive icons for iOS and Android",
+        "Implement splash screen: Black background with white 'Wingtip' text in JetBrains Mono",
+        "Splash fades out after 500ms or when camera initializes",
+        "flutter analyze shows no errors",
+        "Manual verification: Icon and splash screen display correctly on both platforms"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-102"
+      ]
+    },
+    {
+      "id": "US-129",
+      "title": "Empty States",
+      "description": "As a user, I want to see helpful text when my library is empty so that I know what to do.",
+      "acceptanceCriteria": [
+        "Show empty state in Library when no books exist",
+        "Display text: '0 Books. Tap [O] to scan.'",
+        "Include simple vector outline of bookshelf (SVG asset)",
+        "Empty state uses Swiss Utility styling (white on black, 1px borders)",
+        "flutter analyze shows no errors",
+        "Manual verification: Empty state displays on fresh install"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-117"
+      ]
+    },
+    {
+      "id": "US-123",
+      "title": "The Raw Data Toggle",
+      "description": "As a user, I want to see the raw JSON for a book so that I can geek out on the metadata.",
+      "acceptanceCriteria": [
+        "Add toggle switch in Book Detail View: 'Visual' vs 'JSON'",
+        "JSON view displays formatted code block using syntax highlighting",
+        "Use JetBrains Mono font in green (#00FF00) for JSON",
+        "Make JSON text selectable/copyable",
+        "flutter analyze shows no errors",
+        "Manual verification: JSON toggle works and displays valid JSON"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-122"
+      ]
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-01-19T02:04:50.194Z"
+  }
+}

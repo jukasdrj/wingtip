@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/device_id_provider.dart';
+import 'package:wingtip/services/csv_export_service_provider.dart';
 import 'package:wingtip/widgets/error_snack_bar.dart';
 
 /// Debug settings page with options to view and regenerate the device ID.
@@ -33,6 +34,44 @@ class DebugSettingsPage extends ConsumerWidget {
                 'Error: $error',
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
+            ),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Export Library',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final csvExportService = ref.read(csvExportServiceProvider);
+
+                try {
+                  final filePath = await csvExportService.exportLibraryToCsv();
+
+                  if (filePath == null) {
+                    if (context.mounted) {
+                      ErrorSnackBar.show(
+                        context,
+                        message: 'No books to export',
+                      );
+                    }
+                    return;
+                  }
+
+                  await csvExportService.shareExportedCsv(filePath);
+                } catch (e) {
+                  if (context.mounted) {
+                    ErrorSnackBar.show(
+                      context,
+                      message: 'Failed to export library: $e',
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.download),
+              label: const Text('Export Library'),
             ),
             const SizedBox(height: 32),
             const Divider(),
