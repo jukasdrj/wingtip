@@ -148,9 +148,17 @@ class CameraService {
     }
   }
 
-  void dispose() {
-    _controller?.dispose();
-    _controller = null;
+  Future<void> dispose() async {
+    debugPrint('[CameraService] Disposing camera controller');
+    if (_controller != null) {
+      try {
+        await _controller!.dispose();
+        debugPrint('[CameraService] Camera controller disposed successfully');
+      } catch (e) {
+        debugPrint('[CameraService] Error disposing camera controller: $e');
+      }
+      _controller = null;
+    }
     _isInitialized = false;
   }
 }

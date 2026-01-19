@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wingtip/core/memory_pressure_handler.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/core/app_lifecycle_observer.dart';
 import 'package:wingtip/core/performance_metrics_service.dart';
@@ -77,6 +78,9 @@ void main() async {
 
   // Deferred: Run cleanup in background after app launch (non-blocking)
   _deferredCleanup(container);
+
+  // MEMORY OPTIMIZATION: Start listening for memory pressure warnings (iOS)
+  MemoryPressureHandler.startListening();
 
   runApp(
     // Wrap the app in RestartWidget to enable full app restarts

@@ -4,11 +4,11 @@ import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/error_messages.dart';
 import 'package:wingtip/core/failed_scans_directory.dart';
 import 'package:wingtip/core/failure_categorizer.dart';
+import 'package:wingtip/core/image_cache_manager.dart';
 import 'package:wingtip/core/performance_metrics_provider.dart';
 import 'package:wingtip/core/sse_client.dart';
 import 'package:wingtip/core/sse_client_provider.dart';
@@ -29,15 +29,25 @@ class JobStateNotifier extends Notifier<JobState> {
   JobState build() {
     // Clean up subscriptions when notifier is disposed
     ref.onDispose(() {
+      debugPrint('[JobStateNotifier] Disposing notifier and cleaning up resources');
+
+      // MEMORY: Cancel all SSE subscriptions
       for (final subscription in _sseSubscriptions.values) {
         subscription.cancel();
       }
       _sseSubscriptions.clear();
+
+      // MEMORY: Cancel all auto-remove timers
       for (final timer in _autoRemoveTimers.values) {
         timer.cancel();
       }
       _autoRemoveTimers.clear();
+
+      // MEMORY: Cancel rate limit timer
       _rateLimitTimer?.cancel();
+      _rateLimitTimer = null;
+
+      debugPrint('[JobStateNotifier] Cleanup completed');
     });
 
     return JobState.idle();
@@ -789,11 +799,11 @@ class JobStateNotifier extends Notifier<JobState> {
     }
   }
 
-  /// Prefetch cover image to cache
+  /// Prefetch cover image to cache (using custom cache manager with 50MB limit)
   Future<void> _prefetchCoverImage(String imageUrl) async {
     try {
       debugPrint('[JobStateNotifier] Prefetching cover image: $imageUrl');
-      await DefaultCacheManager().downloadFile(imageUrl);
+      await ImageCacheManager.instance.downloadFile(imageUrl);
       debugPrint('[JobStateNotifier] Cover image prefetched successfully');
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to prefetch cover image: $e');

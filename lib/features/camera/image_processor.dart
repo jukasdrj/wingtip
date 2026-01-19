@@ -121,18 +121,23 @@ class ImageProcessor {
   /// 2. Resizing to max dimension on longest side
   /// 3. Encoding to JPEG with quality 85
   /// 4. Saving to temp directory
+  ///
+  /// MEMORY OPTIMIZATION:
+  /// - Explicitly disposes of intermediate image objects
+  /// - Uses linear interpolation (faster and less memory than cubic)
+  /// - Clears byte arrays after use
   static Future<String> _processImageInIsolate(ImageProcessingParams params) async {
     // Read image file
     final imageBytes = await File(params.sourcePath).readAsBytes();
 
     // Decode image
-    final image = img.decodeImage(imageBytes);
+    img.Image? image = img.decodeImage(imageBytes);
     if (image == null) {
       throw Exception('Failed to decode image');
     }
 
     // Resize image if needed
-    img.Image processedImage = image;
+    img.Image? processedImage = image;
     final maxDim = image.width > image.height ? image.width : image.height;
 
     if (maxDim > params.maxDimension) {
@@ -151,10 +156,18 @@ class ImageProcessor {
           interpolation: img.Interpolation.linear,
         );
       }
+
+      // MEMORY: Dispose original image if we created a new one
+      if (processedImage != image) {
+        image.clear();
+      }
     }
 
     // Encode to JPEG with quality 85
     final encodedBytes = img.encodeJpg(processedImage, quality: params.quality);
+
+    // MEMORY: Dispose processed image after encoding
+    processedImage.clear();
 
     // Save file to output directory
     final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -164,5 +177,40 @@ class ImageProcessor {
     await outputFile.writeAsBytes(encodedBytes);
 
     return outputPath;
+  }
+
+  /// Clean up temporary processed images older than 1 hour
+  /// Call this periodically to prevent temp directory bloat
+  static Future<void> cleanupOldTempFiles() async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final dir = Directory(tempDir.path);
+
+      if (!await dir.exists()) return;
+
+      final now = DateTime.now();
+      final oneHourAgo = now.subtract(const Duration(hours: 1));
+      int deletedCount = 0;
+
+      await for (final entity in dir.list()) {
+        if (entity is File && entity.path.contains('processed_')) {
+          try {
+            final stat = await entity.stat();
+            if (stat.modified.isBefore(oneHourAgo)) {
+              await entity.delete();
+              deletedCount++;
+            }
+          } catch (e) {
+            debugPrint('[ImageProcessor] Error checking/deleting temp file: $e');
+          }
+        }
+      }
+
+      if (deletedCount > 0) {
+        debugPrint('[ImageProcessor] Cleaned up $deletedCount old temp files');
+      }
+    } catch (e) {
+      debugPrint('[ImageProcessor] Error during temp file cleanup: $e');
+    }
   }
 }

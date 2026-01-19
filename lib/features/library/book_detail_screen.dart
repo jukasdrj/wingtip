@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/image_cache_manager.dart';
 import '../../core/theme.dart';
 import '../../data/database.dart';
 import 'edit_book_screen.dart';
@@ -205,6 +206,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
           child: widget.book.coverUrl != null && widget.book.coverUrl!.isNotEmpty
               ? CachedNetworkImage(
                   imageUrl: widget.book.coverUrl!,
+                  cacheManager: ImageCacheManager.instance,
                   fit: BoxFit.cover,
                   placeholder: (context, url) => Container(
                     color: AppTheme.borderGray,

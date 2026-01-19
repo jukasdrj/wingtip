@@ -109,8 +109,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   @override
   void dispose() {
+    debugPrint('[CameraScreen] Disposing camera screen resources');
     WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
+    _countdownTimer = null;
+    // Note: Camera controller disposal is handled by CameraService singleton
+    // to allow reuse when navigating back to camera screen
     super.dispose();
   }
 

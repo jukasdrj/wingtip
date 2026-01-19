@@ -6,6 +6,7 @@ import WidgetKit
 @objc class AppDelegate: FlutterAppDelegate {
   private let appGroupId = "group.com.ooheynerds.wingtip"
   private let widgetDataKey = "widget_data"
+  private var memoryChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -13,8 +14,9 @@ import WidgetKit
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
 
-    // Setup widget method channel
+    // Setup method channels
     if let controller = window?.rootViewController as? FlutterViewController {
+      // Setup widget method channel
       let widgetChannel = FlutterMethodChannel(
         name: "com.ooheynerds.wingtip/widget",
         binaryMessenger: controller.binaryMessenger
@@ -44,9 +46,24 @@ import WidgetKit
           result(FlutterMethodNotImplemented)
         }
       }
+
+      // Setup memory pressure method channel
+      memoryChannel = FlutterMethodChannel(
+        name: "com.wingtip/memory",
+        binaryMessenger: controller.binaryMessenger
+      )
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// Handle memory warning from iOS
+  override func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+    super.applicationDidReceiveMemoryWarning(application)
+    print("[AppDelegate] Memory warning received from iOS")
+
+    // Notify Flutter about memory pressure
+    memoryChannel?.invokeMethod("didReceiveMemoryWarning", arguments: nil)
   }
 
   /// Update widget data in App Group shared UserDefaults

@@ -67,6 +67,10 @@ class SseClient {
   ///
   /// If the stream ends without receiving a 'complete' or 'error' event,
   /// yields a synthetic error event indicating connection was lost.
+  ///
+  /// MEMORY OPTIMIZATION:
+  /// - Ensures http.Client is always closed in finally block
+  /// - Explicitly closes client on terminal events
   Stream<SseEvent> listen(String streamUrl) async* {
     int retryCount = 0;
     http.Client? client;
@@ -102,6 +106,9 @@ class SseClient {
               event.type == SseEventType.error) {
             debugPrint('[SseClient] Stream ended with ${event.type}');
             receivedTerminalEvent = true;
+            // MEMORY: Close client immediately on terminal event
+            client?.close();
+            client = null;
             return;
           }
         }
@@ -129,7 +136,9 @@ class SseClient {
         debugPrint('[SseClient] Retrying in ${delay.inMilliseconds}ms...');
         await Future.delayed(delay);
       } finally {
+        // MEMORY: Always close client to prevent leaks
         client?.close();
+        client = null;
       }
     }
   }

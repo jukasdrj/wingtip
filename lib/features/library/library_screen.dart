@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../core/image_cache_manager.dart';
 import '../../core/theme.dart';
 import '../../core/performance_overlay_provider.dart';
 import '../../data/database.dart';
@@ -989,6 +990,7 @@ class _BookCardState extends ConsumerState<BookCard>
                             scale: _coverScaleAnimation,
                             child: CachedNetworkImage(
                               imageUrl: widget.book.coverUrl!,
+                              cacheManager: ImageCacheManager.instance,
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
                                 color: AppTheme.borderGray,
