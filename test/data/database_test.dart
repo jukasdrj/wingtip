@@ -227,6 +227,123 @@ void main() {
     });
   });
 
+  group('Update Book', () {
+    test('should update book metadata', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final book = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Original Title'),
+        author: const Value('Original Author'),
+        format: const Value('Hardcover'),
+        addedDate: Value(now),
+        reviewNeeded: const Value(true),
+      );
+
+      await database.into(database.books).insert(book);
+
+      final success = await database.updateBook(
+        isbn: '978-0-123456-78-9',
+        title: 'Updated Title',
+        author: 'Updated Author',
+        format: 'Paperback',
+        clearReviewNeeded: true,
+      );
+
+      expect(success, true);
+
+      final books = await database.select(database.books).get();
+      expect(books.length, 1);
+      expect(books.first.title, 'Updated Title');
+      expect(books.first.author, 'Updated Author');
+      expect(books.first.format, 'Paperback');
+      expect(books.first.reviewNeeded, false);
+    });
+
+    test('should clear reviewNeeded flag when clearReviewNeeded is true', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final book = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Test Book'),
+        author: const Value('Test Author'),
+        addedDate: Value(now),
+        reviewNeeded: const Value(true),
+      );
+
+      await database.into(database.books).insert(book);
+
+      await database.updateBook(
+        isbn: '978-0-123456-78-9',
+        title: 'Updated Title',
+        author: 'Updated Author',
+        clearReviewNeeded: true,
+      );
+
+      final books = await database.select(database.books).get();
+      expect(books.first.reviewNeeded, false);
+    });
+
+    test('should handle nullable format field', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final book = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Test Book'),
+        author: const Value('Test Author'),
+        format: const Value('Hardcover'),
+        addedDate: Value(now),
+      );
+
+      await database.into(database.books).insert(book);
+
+      await database.updateBook(
+        isbn: '978-0-123456-78-9',
+        title: 'Updated Title',
+        author: 'Updated Author',
+        format: null,
+      );
+
+      final books = await database.select(database.books).get();
+      expect(books.first.format, isNull);
+    });
+
+    test('should return false when updating non-existent book', () async {
+      final success = await database.updateBook(
+        isbn: '978-0-000000-00-0',
+        title: 'Non-existent',
+        author: 'Nobody',
+      );
+
+      expect(success, false);
+    });
+
+    test('should preserve other fields when updating', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final book = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Original Title'),
+        author: const Value('Original Author'),
+        coverUrl: const Value('https://example.com/cover.jpg'),
+        spineConfidence: const Value(0.95),
+        addedDate: Value(now),
+      );
+
+      await database.into(database.books).insert(book);
+
+      await database.updateBook(
+        isbn: '978-0-123456-78-9',
+        title: 'Updated Title',
+        author: 'Updated Author',
+      );
+
+      final books = await database.select(database.books).get();
+      expect(books.first.title, 'Updated Title');
+      expect(books.first.author, 'Updated Author');
+      // These fields should be preserved
+      expect(books.first.coverUrl, 'https://example.com/cover.jpg');
+      expect(books.first.spineConfidence, 0.95);
+      expect(books.first.addedDate, now);
+    });
+  });
+
   group('FTS5 Search', () {
     setUp(() async {
       // Add test books

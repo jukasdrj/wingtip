@@ -356,6 +356,26 @@ class AppDatabase extends _$AppDatabase {
     final result = await countQuery.getSingle();
     return result.read(failedScans.id.count()) ?? 0;
   }
+
+  // Update book metadata
+  Future<bool> updateBook({
+    required String isbn,
+    required String title,
+    required String author,
+    String? format,
+    bool clearReviewNeeded = true,
+  }) async {
+    final companion = BooksCompanion(
+      isbn: Value(isbn),
+      title: Value(title),
+      author: Value(author),
+      format: Value(format),
+      reviewNeeded: Value(clearReviewNeeded ? false : true),
+    );
+
+    final updated = await (update(books)..where((t) => t.isbn.equals(isbn))).write(companion);
+    return updated > 0;
+  }
 }
 
 LazyDatabase _openConnection() {

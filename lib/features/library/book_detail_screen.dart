@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../data/database.dart';
+import 'edit_book_screen.dart';
 
 /// Full-screen book detail view with hero animation and blurred spine background
 class BookDetailScreen extends StatefulWidget {
@@ -63,19 +65,64 @@ class _BookDetailScreenState extends State<BookDetailScreen>
           SafeArea(
             child: Column(
               children: [
-                // Close button
-                Align(
-                  alignment: Alignment.topRight,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.close,
-                        color: AppTheme.textPrimary,
-                        size: 28,
+                // Top action buttons
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Edit button (only shown for review_needed books)
+                      if (widget.book.reviewNeeded)
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            HapticFeedback.lightImpact();
+                            final navigator = Navigator.of(context);
+                            final result = await navigator.push<bool>(
+                              MaterialPageRoute(
+                                builder: (context) => EditBookScreen(book: widget.book),
+                              ),
+                            );
+                            // If edit was successful, pop back to library
+                            if (result == true) {
+                              navigator.pop();
+                            }
+                          },
+                          icon: const Icon(
+                            Icons.edit,
+                            size: 18,
+                            color: AppTheme.textPrimary,
+                          ),
+                          label: Text(
+                            'Edit',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(
+                              color: AppTheme.borderGray,
+                              width: 1,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 80), // Spacer when no edit button
+                      // Close button
+                      IconButton(
+                        icon: const Icon(
+                          Icons.close,
+                          color: AppTheme.textPrimary,
+                          size: 28,
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
                       ),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
+                    ],
                   ),
                 ),
                 // Hero animated book cover

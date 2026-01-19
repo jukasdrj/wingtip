@@ -1,0 +1,482 @@
+{
+  "name": "Project Wingtip - Epic 3: Production Polish & iOS Excellence",
+  "description": "Transform Wingtip from functional MVP to App Store-worthy premium iOS product through PRD delighters, iOS-first optimizations, performance refinement, advanced library features, and production readiness",
+  "branchName": "ralph/wingtip-epic3-polish",
+  "userStories": [
+    {
+      "id": "US-153",
+      "title": "Spine Transition Animation",
+      "description": "As a user, I want to see book covers expand from the blurred captured photo so that I can visually connect the physical book to the digital result.",
+      "acceptanceCriteria": [
+        "When book is identified and user taps notification/result, cover expands from center",
+        "Background shows blurred version of original captured photo where spine was found",
+        "Smooth hero animation transition (300-400ms with ease-out curve)",
+        "Maintain Swiss Utility design: sharp borders on cover, blurred background",
+        "Handle edge cases: missing cover URL shows placeholder with same animation",
+        "flutter analyze shows no errors",
+        "Manual verification: Animation feels smooth and connects physical to digital"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "PRD Section 5 delighter feature - requires design specs for motion",
+      "dependsOn": [
+        "US-122"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-154",
+      "title": "Manual Metadata Editing",
+      "description": "As a user, I want to edit book metadata for review_needed books so that I can correct misidentified titles, authors, or ISBNs.",
+      "acceptanceCriteria": [
+        "Book Detail View shows 'Edit' button for books with review_needed flag",
+        "Tapping Edit opens editable form with fields: Title, Author, ISBN, Format",
+        "Form uses Swiss Utility styling (1px borders, monospace for ISBN)",
+        "Save button triggers database update via Drift",
+        "Clear review_needed flag after successful edit",
+        "Show confirmation snackbar after save",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with edit functionality tests"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Critical PRD feature - yellow review border already exists (US-120)",
+      "dependsOn": [
+        "US-120",
+        "US-122"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-155",
+      "title": "Matrix-Style Stream Overlay",
+      "description": "As a user, I want to see real-time SSE status messages as a transparent overlay so that I can watch the AI analysis in action.",
+      "acceptanceCriteria": [
+        "Transparent overlay appears at top of camera screen during active jobs",
+        "Display SSE stage messages: 'Analyzing...', 'Found 12 spines...', 'Enriching The Martian...'",
+        "Use JetBrains Mono font in green (#00FF00) with semi-transparent black background",
+        "Messages fade in/out with 200ms transitions",
+        "Auto-dismiss overlay 3 seconds after last message",
+        "Tappable to manually dismiss",
+        "flutter analyze shows no errors",
+        "Manual verification: Overlay feels like Matrix-style terminal without blocking view"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "PRD Section 4.1 feature - transparent real-time log",
+      "dependsOn": [
+        "US-111",
+        "US-112"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-156",
+      "title": "Optimistic Cover Loading",
+      "description": "As a user, I want to see book covers animate into place before full metadata arrives so that the library feels fast and responsive.",
+      "acceptanceCriteria": [
+        "On SSE result event with coverUrl, prefetch and cache image immediately",
+        "Animate cover into library grid with fade-in + scale animation (300ms)",
+        "If metadata arrives before image loads, show placeholder then swap to cover",
+        "Use Hero animation when navigating from grid to detail view",
+        "Maintain smooth 60fps during animation (measure with Performance Overlay)",
+        "flutter analyze shows no errors",
+        "Manual verification: Covers appear fluid and responsive during multi-book scans"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "PRD optimistic fluidity principle",
+      "dependsOn": [
+        "US-113",
+        "US-117",
+        "US-118"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-157",
+      "title": "ProMotion 120Hz Optimization",
+      "description": "As a user with iPhone Pro, I want 120fps smooth animations so that the app feels fluid and responsive.",
+      "acceptanceCriteria": [
+        "Enable 120Hz refresh rate in iOS info.plist (CADisableMinimumFrameDurationOnPhone)",
+        "Optimize camera preview rendering for 120fps",
+        "Ensure all animations (grid scroll, transitions, overlays) hit 120fps on ProMotion devices",
+        "Use Flutter Performance Overlay to verify frame timing",
+        "Profile with Xcode Instruments to identify and fix jank sources",
+        "Target: 0 dropped frames during typical scan workflow",
+        "Manual verification: Smooth 120Hz scroll and animations on iPhone 13 Pro or newer"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "iOS-first excellence - requires performance profiling",
+      "dependsOn": [
+        "US-105",
+        "US-117"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-158",
+      "title": "Native iOS Gestures",
+      "description": "As an iOS user, I want native iOS gesture patterns so that the app feels familiar and intuitive.",
+      "acceptanceCriteria": [
+        "Implement iOS-style swipe-back gesture to dismiss detail views",
+        "Long-press on book cards shows iOS-style context menu (UIContextMenu equivalent)",
+        "Context menu options: View Details, Edit, Delete, Share",
+        "Use iOS native haptic patterns (UIImpactFeedbackGenerator) matching system apps",
+        "Implement iOS-style pull-to-refresh in library with spinner",
+        "flutter analyze shows no errors",
+        "Manual verification: Gestures feel native and match iOS system conventions"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "iOS-first excellence - native gesture patterns",
+      "dependsOn": [
+        "US-117",
+        "US-122",
+        "US-125"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-159",
+      "title": "iOS Camera Features - Night Mode & Depth",
+      "description": "As a user scanning in low light or with portrait mode devices, I want iOS camera enhancements so that I can capture book spines in challenging conditions.",
+      "acceptanceCriteria": [
+        "Detect and enable iOS Night Mode when available (low light conditions)",
+        "Show Night Mode indicator in camera UI (yellow moon icon)",
+        "Use portrait mode depth detection to improve spine focus on supported devices",
+        "Automatically adjust exposure compensation for book spines (typically needs +0.5 to +1.0)",
+        "Add iOS-specific camera controls in settings (Night Mode preference)",
+        "flutter analyze shows no errors",
+        "Manual verification: Night mode improves low-light captures, depth helps with focus"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "iOS-first camera excellence",
+      "dependsOn": [
+        "US-105",
+        "US-109"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-160",
+      "title": "iOS Widget - Recent Scans Counter",
+      "description": "As a user, I want a home screen widget showing my scan count so that I can see my library growth at a glance.",
+      "acceptanceCriteria": [
+        "Create iOS WidgetKit extension for home screen widget",
+        "Display total books scanned count and last scan date",
+        "Small widget: Just count and 'Books' label with Wingtip icon",
+        "Medium widget: Count, last scanned book cover thumbnail, and date",
+        "Widget uses Swiss Utility design (black background, white text, 1px borders)",
+        "Tapping widget opens Wingtip app to library view",
+        "flutter analyze shows no errors",
+        "Manual verification: Widget displays correctly and updates after scans"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "iOS integration feature - lower priority for initial launch",
+      "dependsOn": [
+        "US-116",
+        "US-117"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-161",
+      "title": "iOS Camera Enhancement - Lock Focus & Exposure",
+      "description": "As a user, I want to lock focus and exposure independently so that I can capture sharp spine text in challenging lighting.",
+      "acceptanceCriteria": [
+        "Long-press on camera preview to lock focus and exposure",
+        "Show persistent yellow box indicator at locked focus point",
+        "While locked, swipe up/down to adjust exposure compensation (-2.0 to +2.0)",
+        "Display exposure value overlay (e.g., '+1.0 EV') during adjustment",
+        "Lock persists until user taps elsewhere or presses shutter",
+        "Visual feedback matches iOS Camera app UX patterns",
+        "flutter analyze shows no errors",
+        "Manual verification: Lock improves capture quality for reflective covers and mixed lighting"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "iOS-first camera control - directly improves scan success rate",
+      "dependsOn": [
+        "US-105",
+        "US-109"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-162",
+      "title": "Cold Start Optimization",
+      "description": "As a user, I want the app to launch instantly so that I can start scanning immediately.",
+      "acceptanceCriteria": [
+        "Profile current cold start time using Xcode Instruments Time Profiler",
+        "Identify and optimize main thread bottlenecks during startup",
+        "Defer non-critical provider initialization (move to lazy loading)",
+        "Optimize Drift database initialization (async with splash screen)",
+        "Target: Cold start to interactive camera < 800ms (currently ~1000ms)",
+        "Add performance logging to track cold start metrics over time",
+        "flutter analyze shows no errors",
+        "Manual verification: Consistent cold start < 800ms on iPhone 12 or newer"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Performance refinement - critical for UX",
+      "dependsOn": [
+        "US-105"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-163",
+      "title": "Shutter Latency Reduction",
+      "description": "As a user, I want instant shutter response so that I can capture the exact moment I tap.",
+      "acceptanceCriteria": [
+        "Profile current shutter latency using Xcode Instruments",
+        "Optimize camera capture pipeline to reduce main thread work",
+        "Ensure haptic feedback triggers within 16ms of tap (1 frame at 60fps)",
+        "Reduce image capture to processing handoff latency",
+        "Target: Tap to haptic feedback < 30ms (currently ~50ms)",
+        "Use PerformanceMetricsService to track shutter latency metrics",
+        "flutter analyze shows no errors",
+        "Manual verification: Shutter feels instant and responsive during rapid tapping"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Performance refinement - UX critical path",
+      "dependsOn": [
+        "US-106",
+        "US-107"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-164",
+      "title": "Memory Optimization",
+      "description": "As a user, I want the app to use minimal memory so that it doesn't slow down my device or get killed by the OS.",
+      "acceptanceCriteria": [
+        "Profile memory usage with Xcode Instruments Allocations and Leaks",
+        "Identify and fix memory leaks (especially in camera and image processing)",
+        "Optimize image cache size and eviction policy (limit to 50MB)",
+        "Implement proper disposal of camera controllers and streams",
+        "Target: Reduce memory footprint by 20% from baseline",
+        "Add memory pressure handling (release caches on didReceiveMemoryWarning)",
+        "flutter analyze shows no errors",
+        "Manual verification: App remains responsive after 100+ scans without restart"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Performance refinement - stability and OS integration",
+      "dependsOn": [
+        "US-105",
+        "US-107",
+        "US-117"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-165",
+      "title": "Multi-Sort Options",
+      "description": "As a user, I want to sort my library in different ways so that I can find books by different criteria.",
+      "acceptanceCriteria": [
+        "Add sort button in library app bar (Swiss style: icon with dropdown)",
+        "Implement sort options: Date Added (newest/oldest), Title (A-Z/Z-A), Author (A-Z/Z-A), Spine Confidence (high/low)",
+        "Persist selected sort preference using SharedPreferences",
+        "Update Drift query to support ORDER BY clauses for each sort type",
+        "Animate grid re-layout when sort changes (200ms staggered fade)",
+        "flutter analyze shows no errors",
+        "Manual verification: All sort options work correctly with smooth transitions"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Advanced library feature - keep MVP simple",
+      "dependsOn": [
+        "US-117",
+        "US-118"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-166",
+      "title": "Advanced Filters",
+      "description": "As a user, I want to filter my library by format, review status, and date range so that I can find specific subsets of books.",
+      "acceptanceCriteria": [
+        "Add filter button in library app bar next to sort",
+        "Show filter bottom sheet with options: Format (All/Hardcover/Paperback/eBook), Review Status (All/Needs Review/Verified), Date Range (All Time/Last Week/Last Month/Custom)",
+        "Implement Drift WHERE clauses for filter combinations",
+        "Show active filter count badge on filter icon",
+        "Persist filter state during session (clear on app restart)",
+        "flutter analyze shows no errors",
+        "Manual verification: Filters work correctly in combination"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Advanced library feature - defer complex filters for V2",
+      "dependsOn": [
+        "US-117",
+        "US-120"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-167",
+      "title": "Collections/Tags",
+      "description": "As a user, I want to create custom collections so that I can organize books into categories like 'To Read' or 'Favorites'.",
+      "acceptanceCriteria": [
+        "Add 'Collections' tab in library (next to 'All Books' and 'Failed Scans')",
+        "Allow user to create named collections (e.g., 'To Read', 'Favorites', 'Sci-Fi')",
+        "Long-press on book shows 'Add to Collection' in context menu",
+        "Create many-to-many relationship table in Drift (BookCollections)",
+        "Collections view shows collection list with book count badges",
+        "Tapping collection filters library to that collection",
+        "flutter analyze shows no errors",
+        "Manual verification: Collections workflow is intuitive and fast"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Advanced library feature - consider for V2 release",
+      "dependsOn": [
+        "US-116",
+        "US-117",
+        "US-158"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-168",
+      "title": "Book Statistics Dashboard",
+      "description": "As a user, I want to see statistics about my library so that I can understand my reading habits and scanning progress.",
+      "acceptanceCriteria": [
+        "Add 'Stats' section in settings or library header",
+        "Display key metrics: Total Books, Books This Week/Month, Scan Streak (consecutive days)",
+        "Show top authors and formats as simple bar charts",
+        "Calculate and display average books per scanning session",
+        "Use Swiss Utility design: monospace numbers, minimal charts with 1px borders",
+        "Query metrics from Drift database with efficient aggregations",
+        "flutter analyze shows no errors",
+        "Manual verification: Stats accurately reflect library data"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Advanced library feature - engagement and retention",
+      "dependsOn": [
+        "US-116",
+        "US-117"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-169",
+      "title": "Onboarding Flow",
+      "description": "As a new user, I want a clear onboarding experience so that I understand how to use Wingtip effectively.",
+      "acceptanceCriteria": [
+        "Create 3-slide onboarding carousel shown on first launch",
+        "Slide 1: 'The Shutter That Remembers' - Explain core concept with bookshelf visual",
+        "Slide 2: 'Local-First Library' - Explain offline capability and data ownership",
+        "Slide 3: 'Grant Camera Access' - Explain why camera is needed (integrates with US-128)",
+        "Use Swiss Utility design throughout (black background, white text, minimal graphics)",
+        "Save onboarding completion flag to SharedPreferences",
+        "flutter analyze shows no errors",
+        "Manual verification: Onboarding is clear, concise, and builds trust"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Production readiness - critical for App Store launch",
+      "dependsOn": [
+        "US-102",
+        "US-128"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-170",
+      "title": "App Store Assets",
+      "description": "As a developer, I want professional App Store assets so that Wingtip can launch successfully.",
+      "acceptanceCriteria": [
+        "Create 6.7\" iPhone Pro Max screenshots (1290x2796) showing: camera view, scanning in action, library grid, book detail, search results, settings",
+        "Record 30-second app preview video demonstrating scan workflow",
+        "Write compelling App Store description highlighting local-first, offline, Swiss design",
+        "Create app icon at all required sizes (1024x1024 for App Store)",
+        "Prepare privacy policy and support URL",
+        "Add App Store metadata to assets/ folder for reference",
+        "Manual verification: Assets look professional and accurately represent app"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Production readiness - required for App Store submission",
+      "dependsOn": [
+        "US-102",
+        "US-105",
+        "US-117",
+        "US-127"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-171",
+      "title": "Crash Reporting",
+      "description": "As a developer, I want crash reporting and analytics so that I can identify and fix issues in production.",
+      "acceptanceCriteria": [
+        "Integrate Firebase Crashlytics or Sentry for crash reporting",
+        "Configure crash reporting to respect user privacy (no PII in logs)",
+        "Add custom crash keys for context: device_id, books_count, active_jobs_count",
+        "Implement global error handler for uncaught exceptions",
+        "Test crash reporting in debug and release builds",
+        "Add analytics events for key user actions: scan_started, scan_completed, book_saved",
+        "flutter analyze shows no errors",
+        "Manual verification: Test crash is logged correctly to dashboard"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Production readiness - essential for production stability",
+      "dependsOn": [
+        "US-101"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-172",
+      "title": "Beta Testing Preparation",
+      "description": "As a developer, I want to prepare for TestFlight beta testing so that I can gather user feedback before public launch.",
+      "acceptanceCriteria": [
+        "Configure iOS bundle ID and signing for TestFlight distribution",
+        "Add TestFlight beta testing instructions to app (hidden debug menu)",
+        "Create in-app feedback mechanism (shake to send feedback with logs)",
+        "Prepare beta tester welcome email with testing goals and known issues",
+        "Set up TestFlight in App Store Connect with external testing group",
+        "Add version number and build number display in settings",
+        "flutter build ios --release completes successfully",
+        "Manual verification: TestFlight build installs and runs on test devices"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Production readiness - final step before launch",
+      "dependsOn": [
+        "US-171"
+      ],
+      "completionNotes": ""
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-01-19T17:45:00.000Z",
+    "epic": 3,
+    "epicName": "Production Polish & iOS Excellence",
+    "previousEpics": [
+      "Epic 1: Core MVP (US-101 to US-130)",
+      "Epic 2: Failed Scans & Resilience (US-131 to US-152)"
+    ],
+    "focusAreas": [
+      "PRD Delighters (US-153 to US-156)",
+      "iOS-First Excellence (US-157 to US-161)",
+      "Performance Refinement (US-162 to US-164)",
+      "Advanced Library Features (US-165 to US-168)",
+      "Production Readiness (US-169 to US-172)"
+    ],
+    "launchPriority": {
+      "mustHave": ["US-153", "US-154", "US-162", "US-169", "US-170", "US-171", "US-172"],
+      "highImpact": ["US-155", "US-156", "US-157", "US-158", "US-161", "US-163", "US-165", "US-166"],
+      "followUp": ["US-159", "US-160", "US-164", "US-167", "US-168"]
+    }
+  }
+}
