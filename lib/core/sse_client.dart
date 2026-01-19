@@ -64,11 +64,16 @@ class SseClient {
   ///
   /// Implements exponential backoff retry up to [maxRetries] times
   /// on connection errors.
+  ///
+  /// If the stream ends without receiving a 'complete' or 'error' event,
+  /// yields a synthetic error event indicating connection was lost.
   Stream<SseEvent> listen(String streamUrl) async* {
     int retryCount = 0;
     http.Client? client;
 
     while (retryCount <= maxRetries) {
+      bool receivedTerminalEvent = false;
+
       try {
         client = http.Client();
         debugPrint('[SseClient] Connecting to: $streamUrl (attempt ${retryCount + 1})');
@@ -96,12 +101,20 @@ class SseClient {
           if (event.type == SseEventType.complete ||
               event.type == SseEventType.error) {
             debugPrint('[SseClient] Stream ended with ${event.type}');
+            receivedTerminalEvent = true;
             return;
           }
         }
 
-        // Stream ended naturally
-        debugPrint('[SseClient] Stream ended');
+        // Stream ended without receiving 'complete' or 'error' event
+        // This indicates a connection drop mid-stream
+        if (!receivedTerminalEvent) {
+          debugPrint('[SseClient] Stream ended unexpectedly without terminal event');
+          yield SseEvent(
+            type: SseEventType.error,
+            data: {'message': 'Connection lost during processing'},
+          );
+        }
         return;
       } catch (e) {
         debugPrint('[SseClient] Error: $e');

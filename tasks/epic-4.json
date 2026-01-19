@@ -287,12 +287,12 @@
         "Manual verification: Batch retry handles mix of successes and failures correctly"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-138"
       ],
-      "completionNotes": ""
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-139",
@@ -310,12 +310,12 @@
         "Manual verification: Detail view provides helpful debugging information"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-141"
       ],
-      "completionNotes": ""
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-145",
@@ -331,12 +331,12 @@
         "Manual verification: Reconnection prompt appears correctly"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-139"
       ],
-      "completionNotes": ""
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-148",
@@ -448,7 +448,7 @@
   ],
   "metadata": {
     "createdAt": "2026-01-18T00:00:00.000Z",
-    "updatedAt": "2026-01-19T05:16:06.274Z",
+    "updatedAt": "2026-01-19T05:26:43.956Z",
     "epicNumber": 4,
     "totalStories": 20,
     "completedStories": 0,

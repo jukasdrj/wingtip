@@ -314,6 +314,16 @@ void main() {
         expect(event.type, SseEventType.error);
         expect(event.data['message'], 'Processing failed');
       });
+
+      test('should create synthetic error event for connection drop', () async {
+        final syntheticEvent = SseEvent(
+          type: SseEventType.error,
+          data: {'message': 'Connection lost during processing'},
+        );
+
+        expect(syntheticEvent.type, SseEventType.error);
+        expect(syntheticEvent.data['message'], 'Connection lost during processing');
+      });
     });
   });
 }

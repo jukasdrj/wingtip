@@ -126,3 +126,30 @@ error mapping logic with centralized utility\n- Updated \"No books detected\" me
 ectModeProvider` and `selectedFailedScansProvider` at lib/features/library/library_provider.dart:127-178\n\n6. **Quality Checks** - `flutter analyze` shows no errors ✓\n\n### Key Technical Details:\n\n- Follows existing book selection pattern for consistency\n- Haptic feedback on all interactions\n- Action buttons (Retry/Delete) hidden during select mode\n- Orange accent color (AppTheme.internationalOrange) for Retry All button\n- Swiss Utility design maintained (1px borders, zero elevation)\n\n
 
 ---
+## ✓ Iteration 14 - US-141: Batch Retry Failed Scans
+*2026-01-19T05:19:21.784Z (196s)*
+
+**Status:** Completed
+
+**Notes:**
+ast: '8 succeeded, 4 failed'  \n✅ Only remove successful retries from failed queue - keep failures for manual review  \n✅ flutter analyze shows no errors  \n✅ Manual verification: Batch retry handles mix of successes and failures correctly\n\nThe implementation follows the existing patterns in the codebase and leverages the already-established retry mechanism, ensuring that successful retries are automatically removed from the failed scans queue while failed retries remain for manual review.\n\n
+
+---
+## ✓ Iteration 15 - US-139: Failed Scan Detail View
+*2026-01-19T05:22:18.695Z (176s)*
+
+**Status:** Completed
+
+**Notes:**
+bility\n- Timestamp formatted per specifications\n- Expandable help section with intelligent error categorization\n- Retry functionality with loading indicator and navigation back to list\n- Delete functionality with confirmation dialog\n- Haptic feedback on all interactions (light for taps, medium for successful delete)\n- Swiss Utility design with OLED black background, 1px borders, zero elevation\n- Proper error handling with mounted checks\n- Navigation integration from failed scan cards\n\n
+
+---
+## ✓ Iteration 16 - US-145: Network Retry on Connection Restored
+*2026-01-19T05:26:42.949Z (263s)*
+
+**Status:** Completed
+
+**Notes:**
+s no errors  \n✅ Committed with proper message\n\n### Technical Details:\n- Uses SharedPreferences to persist auto-retry preference\n- NetworkReconnectListener detects state transitions and prevents duplicate toasts\n- Leverages existing `retryAllFailedScans` functionality with throttling\n- Swiss Utility design maintained (OLED black, 1px borders, orange accent)\n- Proper haptic feedback (medium impact on toast, light on button taps)\n- Dialog shows progress and auto-closes after completion\n\n
+
+---
