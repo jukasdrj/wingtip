@@ -162,3 +162,12 @@ s no errors  \n✅ Committed with proper message\n\n### Technical Details:\n- Us
 ase\n2. If the connection drops before receiving 'complete' or 'error', the SSE client detects this and yields a synthetic error event\n3. The job state notifier handles this error event by:\n   - Marking the job as failed with haptic feedback\n   - Saving the failed scan entry with persistent image storage\n   - The books already saved remain in the library\n4. User sees partial results in library + can retry from failed scans view\n5. Retry re-uploads the full image for complete processing\n\n
 
 ---
+## ✓ Iteration 18 - US-150: Background Isolate Image Processing Verification
+*2026-01-19T05:34:06.825Z (284s)*
+
+**Status:** Completed
+
+**Notes:**
+\n4. `lib/features/camera/camera_screen.dart` - Pass ref to processor\n5. `lib/features/debug/debug_settings_page.dart` - Added metrics UI\n6. `US-150-VERIFICATION.md` - Manual testing guide\n\n### Manual Testing Guide\n\nA verification document has been created at `US-150-VERIFICATION.md` with step-by-step instructions for:\n- Verifying logs show correct timing\n- Checking debug metrics display\n- Testing rapid shutter taps for responsiveness\n- Confirming < 500ms average performance target\n\n
+
+---

@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
 import 'package:wingtip/features/camera/image_processor.dart';
+import 'package:wingtip/features/camera/session_counter_provider.dart';
+import 'package:wingtip/features/camera/session_counter_widget.dart';
 import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/features/talaria/processing_stack_widget.dart';
 import 'package:wingtip/features/talaria/job_state_provider.dart';
@@ -19,7 +21,8 @@ class CameraScreen extends ConsumerStatefulWidget {
   ConsumerState<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends ConsumerState<CameraScreen> {
+class _CameraScreenState extends ConsumerState<CameraScreen>
+    with WidgetsBindingObserver {
   bool _showFlash = false;
   double _currentZoom = 1.0;
   double _minZoom = 1.0;
@@ -29,13 +32,26 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   bool _showFocusIndicator = false;
   Timer? _countdownTimer;
   final Set<String> _shownErrorJobIds = {};
+  final Set<String> _completedJobIds = {};
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeZoomLevels();
     _startCountdownTimer();
     _setupJobErrorListener();
+    _setupJobCompletionListener();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      // Reset session counter when app goes to background
+      ref.read(sessionCounterProvider.notifier).reset();
+    }
   }
 
   void _setupJobErrorListener() {
@@ -61,8 +77,28 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     });
   }
 
+  void _setupJobCompletionListener() {
+    // Listen for job completions and increment session counter
+    ref.listenManual(jobStateProvider, (previous, next) {
+      if (!mounted) return;
+
+      // Find jobs that just completed
+      for (final job in next.jobs) {
+        if (job.status == JobStatus.completed &&
+            !_completedJobIds.contains(job.id)) {
+          // Mark as counted
+          _completedJobIds.add(job.id);
+
+          // Increment session counter
+          ref.read(sessionCounterProvider.notifier).increment();
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
     super.dispose();
   }
@@ -207,6 +243,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
             if (_showFocusIndicator && _focusPoint != null)
               _buildFocusIndicator(),
           ],
+          _buildSessionCounter(),
           _buildLibraryButton(context),
           _buildRateLimitOverlay(),
         ],
@@ -287,9 +324,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     );
   }
 
+  Widget _buildSessionCounter() {
+    return const Positioned(
+      top: 48,
+      right: 16,
+      child: SessionCounterWidget(),
+    );
+  }
+
   Widget _buildLibraryButton(BuildContext context) {
     return Positioned(
-      top: 48,
+      top: 108, // Position below session counter
       right: 16,
       child: GestureDetector(
         onTap: () {
