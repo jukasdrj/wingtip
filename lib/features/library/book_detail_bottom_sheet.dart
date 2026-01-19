@@ -1,15 +1,33 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../data/database.dart';
 
-class BookDetailBottomSheet extends StatelessWidget {
+class BookDetailBottomSheet extends StatefulWidget {
   final Book book;
 
   const BookDetailBottomSheet({
     super.key,
     required this.book,
   });
+
+  @override
+  State<BookDetailBottomSheet> createState() => _BookDetailBottomSheetState();
+
+  static Future<void> show(BuildContext context, Book book) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => BookDetailBottomSheet(book: book),
+    );
+  }
+}
+
+class _BookDetailBottomSheetState extends State<BookDetailBottomSheet> {
+  bool _showJsonView = false;
 
   @override
   Widget build(BuildContext context) {
@@ -36,50 +54,65 @@ class BookDetailBottomSheet extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // Drag handle
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.dividerColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+              // Drag handle and toggle
+              Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.dividerColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // Toggle switch
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Visual',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: !_showJsonView
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            fontWeight: !_showJsonView ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Switch(
+                          value: _showJsonView,
+                          onChanged: (value) {
+                            setState(() {
+                              _showJsonView = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'JSON',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: _showJsonView
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            fontWeight: _showJsonView ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               // Scrollable content
               Expanded(
                 child: SingleChildScrollView(
                   controller: scrollController,
                   padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Passport-style layout
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Large cover image on left
-                          _buildCoverImage(context),
-                          const SizedBox(width: 24),
-                          // Metadata fields on right
-                          Expanded(
-                            child: _buildMetadataSection(context),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      // Edit button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // TODO: Implement edit functionality in future story
-                          },
-                          child: const Text('Edit'),
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: _showJsonView
+                      ? _buildJsonView(context)
+                      : _buildVisualView(context),
                 ),
               ),
             ],
@@ -89,11 +122,91 @@ class BookDetailBottomSheet extends StatelessWidget {
     );
   }
 
+  Widget _buildVisualView(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Passport-style layout
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Large cover image on left
+            _buildCoverImage(context),
+            const SizedBox(width: 24),
+            // Metadata fields on right
+            Expanded(
+              child: _buildMetadataSection(context),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        // Edit button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () {
+              // TODO: Implement edit functionality in future story
+            },
+            child: const Text('Edit'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildJsonView(BuildContext context) {
+    final jsonString = const JsonEncoder.withIndent('  ').convert(widget.book.toJson());
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // JSON container with syntax highlighting
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: const Color(0xFF00FF00).withValues(alpha: 0.3),
+              width: 1,
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: SelectableText(
+            jsonString,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 13,
+              color: const Color(0xFF00FF00),
+              height: 1.5,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Copy button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: jsonString));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('JSON copied to clipboard'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy),
+            label: const Text('Copy JSON'),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCoverImage(BuildContext context) {
     const imageWidth = 120.0;
     const imageHeight = 180.0;
 
-    if (book.coverUrl != null && book.coverUrl!.isNotEmpty) {
+    if (widget.book.coverUrl != null && widget.book.coverUrl!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(4),
         child: Container(
@@ -107,7 +220,7 @@ class BookDetailBottomSheet extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
           ),
           child: CachedNetworkImage(
-            imageUrl: book.coverUrl!,
+            imageUrl: widget.book.coverUrl!,
             fit: BoxFit.cover,
             placeholder: (context, url) => Container(
               color: Colors.grey[900],
@@ -143,7 +256,7 @@ class BookDetailBottomSheet extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            book.title,
+            widget.book.title,
             style: GoogleFonts.jetBrainsMono(
               fontSize: 12,
               fontWeight: FontWeight.bold,
@@ -155,7 +268,7 @@ class BookDetailBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            book.author,
+            widget.book.author,
             style: GoogleFonts.jetBrainsMono(
               fontSize: 10,
               color: Colors.white70,
@@ -178,7 +291,7 @@ class BookDetailBottomSheet extends StatelessWidget {
         _buildMetadataField(
           context,
           label: 'ISBN',
-          value: book.isbn,
+          value: widget.book.isbn,
           valueStyle: GoogleFonts.jetBrainsMono(
             fontSize: 14,
             color: theme.colorScheme.onSurface,
@@ -188,7 +301,7 @@ class BookDetailBottomSheet extends StatelessWidget {
         _buildMetadataField(
           context,
           label: 'Title',
-          value: book.title,
+          value: widget.book.title,
           valueStyle: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -197,14 +310,14 @@ class BookDetailBottomSheet extends StatelessWidget {
         _buildMetadataField(
           context,
           label: 'Author',
-          value: book.author,
+          value: widget.book.author,
           valueStyle: theme.textTheme.bodyLarge,
         ),
         const SizedBox(height: 16),
         _buildMetadataField(
           context,
           label: 'Format',
-          value: book.format ?? 'Unknown',
+          value: widget.book.format ?? 'Unknown',
           valueStyle: theme.textTheme.bodyLarge,
         ),
       ],
@@ -234,15 +347,6 @@ class BookDetailBottomSheet extends StatelessWidget {
           style: valueStyle ?? theme.textTheme.bodyMedium,
         ),
       ],
-    );
-  }
-
-  static Future<void> show(BuildContext context, Book book) {
-    return showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => BookDetailBottomSheet(book: book),
     );
   }
 }
