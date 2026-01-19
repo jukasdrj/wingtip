@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wingtip/core/theme.dart';
+import 'package:wingtip/core/app_lifecycle_observer.dart';
 import 'package:wingtip/features/camera/camera_screen.dart';
 import 'package:wingtip/features/camera/camera_service.dart';
 import 'package:wingtip/features/camera/permission_primer_screen.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:wingtip/services/failed_scans_cleanup_service_provider.dart';
 
 void main() async {
   // Preserve the splash screen
@@ -19,6 +21,16 @@ void main() async {
 
   // Hide system UI for full immersion
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+
+  // Create provider container for startup initialization
+  final container = ProviderContainer();
+
+  // Run cleanup on startup (non-blocking)
+  final cleanupService = container.read(failedScansCleanupServiceProvider);
+  cleanupService.runFullCleanup().catchError((error) {
+    debugPrint('[Startup] Cleanup failed: $error');
+    return 0;
+  });
 
   // Minimum splash display time (500ms)
   final splashTimer = Future.delayed(const Duration(milliseconds: 500));
@@ -51,7 +63,13 @@ void main() async {
     debugPrint('[Performance] Camera permission not granted, showing primer screen');
   }
 
-  runApp(ProviderScope(child: MyApp(hasPermission: cameraPermissionStatus.isGranted)));
+  runApp(
+    // Use the same container for the app
+    UncontrolledProviderScope(
+      container: container,
+      child: MyApp(hasPermission: cameraPermissionStatus.isGranted),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -64,9 +82,12 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  AppLifecycleObserver? _lifecycleObserver;
+
   @override
   void initState() {
     super.initState();
+
     // Remove splash screen after first frame is rendered
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FlutterNativeSplash.remove();
@@ -75,13 +96,30 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Wingtip',
-      // Lock to dark theme with Swiss Utility styling
-      theme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
-      // Show permission primer if not granted, otherwise camera screen
-      home: widget.hasPermission ? const CameraScreen() : const PermissionPrimerScreen(),
+    return Consumer(
+      builder: (context, ref, child) {
+        // Initialize lifecycle observer once we have access to the container
+        if (_lifecycleObserver == null) {
+          final cleanupService = ref.read(failedScansCleanupServiceProvider);
+          _lifecycleObserver = AppLifecycleObserver(cleanupService);
+          WidgetsBinding.instance.addObserver(_lifecycleObserver!);
+        }
+
+        return MaterialApp(
+          title: 'Wingtip',
+          // Lock to dark theme with Swiss Utility styling
+          theme: AppTheme.darkTheme,
+          themeMode: ThemeMode.dark,
+          // Show permission primer if not granted, otherwise camera screen
+          home: widget.hasPermission ? const CameraScreen() : const PermissionPrimerScreen(),
+        );
+      },
     );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleObserver?.dispose();
+    super.dispose();
   }
 }
