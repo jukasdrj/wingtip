@@ -56,6 +56,7 @@ dependencies:
   # Network
   dio: ^5.4.0
   connectivity_plus: ^6.1.1
+  http: ^1.2.0
 
   # Camera
   camera: ^0.11.0+2

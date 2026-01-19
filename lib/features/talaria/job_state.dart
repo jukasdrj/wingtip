@@ -5,6 +5,8 @@ class JobState {
   final String? imagePath;
   final JobStatus status;
   final String? errorMessage;
+  final double? progress;
+  final Map<String, dynamic>? result;
 
   const JobState({
     this.jobId,
@@ -12,6 +14,8 @@ class JobState {
     this.imagePath,
     required this.status,
     this.errorMessage,
+    this.progress,
+    this.result,
   });
 
   factory JobState.idle() {
@@ -38,6 +42,34 @@ class JobState {
     );
   }
 
+  factory JobState.processing({
+    required String jobId,
+    required String streamUrl,
+    required String imagePath,
+    required double progress,
+  }) {
+    return JobState(
+      status: JobStatus.processing,
+      jobId: jobId,
+      streamUrl: streamUrl,
+      imagePath: imagePath,
+      progress: progress,
+    );
+  }
+
+  factory JobState.completed({
+    required String jobId,
+    required String imagePath,
+    required Map<String, dynamic> result,
+  }) {
+    return JobState(
+      status: JobStatus.completed,
+      jobId: jobId,
+      imagePath: imagePath,
+      result: result,
+    );
+  }
+
   factory JobState.error(String message) {
     return JobState(
       status: JobStatus.error,
@@ -51,6 +83,8 @@ class JobState {
     String? imagePath,
     JobStatus? status,
     String? errorMessage,
+    double? progress,
+    Map<String, dynamic>? result,
   }) {
     return JobState(
       jobId: jobId ?? this.jobId,
@@ -58,6 +92,8 @@ class JobState {
       imagePath: imagePath ?? this.imagePath,
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
+      progress: progress ?? this.progress,
+      result: result ?? this.result,
     );
   }
 }
@@ -66,5 +102,7 @@ enum JobStatus {
   idle,
   uploading,
   listening,
+  processing,
+  completed,
   error,
 }
