@@ -162,14 +162,14 @@ class JobCardWidget extends StatelessWidget {
   Color _getBorderColor(JobStatus status) {
     switch (status) {
       case JobStatus.uploading:
-        return const Color(0xFFFFCC00); // Yellow
+        return Colors.yellow;
       case JobStatus.listening:
       case JobStatus.processing:
-        return const Color(0xFF007AFF); // Blue
+        return Colors.blue;
       case JobStatus.completed:
-        return const Color(0xFF34C759); // Green
+        return Colors.green;
       case JobStatus.error:
-        return const Color(0xFFFF3B30); // Red
+        return Colors.red;
     }
   }
 }
