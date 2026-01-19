@@ -88,6 +88,15 @@ dependencies:
   # Crash reporting and analytics
   sentry_flutter: ^8.0.0
 
+  # App version info
+  package_info_plus: ^8.1.2
+
+  # Sensor access (for shake detection)
+  sensors_plus: ^7.0.0
+
+  # URL launcher (for email feedback)
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -18,6 +18,7 @@ import 'package:wingtip/features/onboarding/onboarding_screen.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:wingtip/services/failed_scans_cleanup_service_provider.dart';
 import 'package:wingtip/widgets/network_reconnect_listener.dart';
+import 'package:wingtip/widgets/shake_to_feedback_wrapper.dart';
 
 void main() async {
   // Initialize Sentry for crash reporting and analytics
@@ -195,7 +196,9 @@ class _MyAppState extends State<MyApp> {
             // Enable performance overlay for ProMotion profiling
             showPerformanceOverlay: showPerformanceOverlay,
             // Route logic: Onboarding → Permission → Camera
-            home: _determineHomeScreen(),
+            home: ShakeToFeedbackWrapper(
+              child: _determineHomeScreen(),
+            ),
           ),
         );
       },

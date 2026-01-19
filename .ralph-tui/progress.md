@@ -173,3 +173,12 @@ g_screen.dart` (3 slides with carousel)\n- Created: `lib/features/onboarding/onb
 bmit** - Follow `SUBMISSION-CHECKLIST.md` for App Store Connect upload\n\n### 📈 Key Highlights\n\n- **Privacy-First Messaging:** Emphasizes zero tracking, local-first storage\n- **Swiss Design Focus:** OLED black, high contrast, zero elevation aesthetic\n- **iOS-Optimized:** Native performance, haptic feedback, ProMotion support\n- **Professional Quality:** 2000+ lines of documentation, comprehensive checklists\n- **Production-Ready:** All text approved, just needs screenshots/video capture\n\n
 
 ---
+## ✓ Iteration 19 - US-171: Crash Reporting
+*2026-01-19T17:15:17.426Z (354s)*
+
+**Status:** Completed
+
+**Notes:**
+ger | Parameters |\n|-------|---------|------------|\n| `scan_started` | User taps shutter | `job_id` |\n| `scan_completed` | Scan finishes successfully | `job_id`, `books_found` |\n| `book_saved` | Book saved to database | `isbn`, `has_cover`, `spine_confidence` |\n\n### 📖 Testing Guide\n\nSee `CRASH_REPORTING.md` for complete setup instructions including:\n- Creating a Sentry account\n- Configuring DSN\n- Testing crashes in debug/release\n- Verifying context data\n- Privacy considerations\n\n
+
+---

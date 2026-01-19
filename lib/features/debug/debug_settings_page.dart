@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wingtip/core/device_id_provider.dart';
 import 'package:wingtip/core/performance_metrics.dart';
@@ -17,6 +18,7 @@ import 'package:wingtip/services/csv_export_service_provider.dart';
 import 'package:wingtip/services/failed_scan_retention_service.dart';
 import 'package:wingtip/services/network_reconnect_service.dart';
 import 'package:wingtip/widgets/error_snack_bar.dart';
+import 'package:wingtip/widgets/feedback_dialog.dart';
 
 /// Debug settings page with options to view and regenerate the device ID.
 class DebugSettingsPage extends ConsumerWidget {
@@ -30,11 +32,41 @@ class DebugSettingsPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Debug Settings'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // App Version Section
+            Text(
+              'App Version',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            const _AppVersionSection(),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            // TestFlight Beta Instructions Section
+            Text(
+              'TestFlight Beta Testing',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            const _TestFlightInstructionsSection(),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            // Send Feedback Section
+            Text(
+              'Send Feedback',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            const _SendFeedbackSection(),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
             Text(
               'Device ID',
               style: Theme.of(context).textTheme.titleLarge,
@@ -1192,6 +1224,258 @@ class _PerformanceMetricRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// App version section showing version and build number
+class _AppVersionSection extends StatefulWidget {
+  const _AppVersionSection();
+
+  @override
+  State<_AppVersionSection> createState() => _AppVersionSectionState();
+}
+
+class _AppVersionSectionState extends State<_AppVersionSection> {
+  String _version = 'Loading...';
+  String _buildNumber = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersionInfo();
+  }
+
+  Future<void> _loadVersionInfo() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _version = packageInfo.version;
+        _buildNumber = packageInfo.buildNumber;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Version',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                Text(
+                  _version,
+                  style: AppTheme.monoStyle(fontSize: 16).copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Build Number',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                Text(
+                  _buildNumber,
+                  style: AppTheme.monoStyle(fontSize: 16).copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// TestFlight instructions section
+class _TestFlightInstructionsSection extends StatelessWidget {
+  const _TestFlightInstructionsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Thank you for beta testing Wingtip!',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'What to Test:',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            _InstructionItem(
+              icon: Icons.camera_alt,
+              text: 'Scan book spines using the camera',
+            ),
+            const SizedBox(height: 8),
+            _InstructionItem(
+              icon: Icons.library_books,
+              text: 'Browse and search your library',
+            ),
+            const SizedBox(height: 8),
+            _InstructionItem(
+              icon: Icons.wifi_off,
+              text: 'Test offline mode functionality',
+            ),
+            const SizedBox(height: 8),
+            _InstructionItem(
+              icon: Icons.speed,
+              text: 'Note any lag, crashes, or UI issues',
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'How to Send Feedback:',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.internationalOrange.withValues(alpha: 0.1),
+                border: Border.all(color: AppTheme.internationalOrange),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.vibration,
+                    color: AppTheme.internationalOrange,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Shake your device anywhere in the app to open the feedback form',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppTheme.textPrimary,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Or use the button below:',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => showFeedbackDialog(context),
+                icon: const Icon(Icons.feedback),
+                label: const Text('Send Feedback Now'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Instruction item widget
+class _InstructionItem extends StatelessWidget {
+  const _InstructionItem({
+    required this.icon,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: AppTheme.internationalOrange,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textSecondary,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Send feedback section
+class _SendFeedbackSection extends StatelessWidget {
+  const _SendFeedbackSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Have feedback or found a bug?',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => showFeedbackDialog(context),
+                icon: const Icon(Icons.send),
+                label: const Text('Send Feedback'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.internationalOrange,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Device info and recent logs will be included automatically.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
