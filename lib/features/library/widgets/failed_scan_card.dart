@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme.dart';
 import '../../../data/database.dart';
 import '../library_provider.dart';
+import '../failed_scan_detail_screen.dart';
 
 class FailedScanCard extends ConsumerWidget {
   final FailedScan failedScan;
@@ -58,7 +59,16 @@ class FailedScanCard extends ConsumerWidget {
               HapticFeedback.lightImpact();
               ref.read(selectedFailedScansProvider.notifier).toggle(failedScan.jobId);
             }
-          : null,
+          : () {
+              HapticFeedback.lightImpact();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => FailedScanDetailScreen(
+                    failedScan: failedScan,
+                  ),
+                ),
+              );
+            },
       onLongPress: selectMode
           ? null
           : () {
