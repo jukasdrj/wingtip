@@ -15,10 +15,28 @@ class LibraryScreen extends ConsumerStatefulWidget {
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   final Set<String> _seenBookIsbns = {};
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    ref.read(searchQueryProvider.notifier).setQuery(_searchController.text);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final booksAsync = ref.watch(allBooksProvider);
+    final booksAsync = ref.watch(booksProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.oledBlack,
@@ -34,20 +52,66 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ),
         ),
       ),
-      body: booksAsync.when(
-        data: (books) {
-          if (books.isEmpty) {
-            return Center(
-              child: Text(
-                'No books yet',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+      body: Column(
+        children: [
+          // Search TextField
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchController,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textPrimary,
+                  ),
+              decoration: InputDecoration(
+                hintText: 'Search by title, author, or ISBN...',
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                prefixIcon: const Icon(
+                  Icons.search,
                   color: AppTheme.textSecondary,
                 ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.clear,
+                          color: AppTheme.textSecondary,
+                        ),
+                        onPressed: () {
+                          _searchController.clear();
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppTheme.borderGray.withValues(alpha: 0.3),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
-            );
-          }
+            ),
+          ),
+          // Books grid
+          Expanded(
+            child: booksAsync.when(
+              data: (books) {
+                if (books.isEmpty) {
+                  final searchQuery = ref.watch(searchQueryProvider);
+                  return Center(
+                    child: Text(
+                      searchQuery.isEmpty ? 'No books yet' : 'No books found',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: AppTheme.textSecondary,
+                          ),
+                    ),
+                  );
+                }
 
-          return GridView.builder(
+                return GridView.builder(
             padding: const EdgeInsets.all(16),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
@@ -82,10 +146,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           child: Text(
             'Error loading books',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AppTheme.textSecondary,
-            ),
+                  color: AppTheme.textSecondary,
+                ),
           ),
         ),
+      ),
+    ),
+        ],
       ),
     );
   }
