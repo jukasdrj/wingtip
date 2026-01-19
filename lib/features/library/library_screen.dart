@@ -7,6 +7,7 @@ import '../../data/database.dart';
 import '../../data/database_provider.dart';
 import 'library_provider.dart';
 import 'book_detail_bottom_sheet.dart';
+import 'widgets/empty_library_state.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -240,9 +241,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               data: (books) {
                 if (books.isEmpty) {
                   final searchQuery = ref.watch(searchQueryProvider);
+                  // Show empty state only when no search is active
+                  if (searchQuery.isEmpty) {
+                    return const EmptyLibraryState();
+                  }
+                  // Show "No books found" for search results
                   return Center(
                     child: Text(
-                      searchQuery.isEmpty ? 'No books yet' : 'No books found',
+                      'No books found',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: AppTheme.textSecondary,
                           ),
