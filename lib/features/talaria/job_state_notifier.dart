@@ -14,13 +14,21 @@ import 'package:wingtip/features/talaria/job_state.dart';
 
 /// Notifier for managing Talaria scan job state
 class JobStateNotifier extends Notifier<JobState> {
-  StreamSubscription<SseEvent>? _sseSubscription;
+  final Map<String, StreamSubscription<SseEvent>> _sseSubscriptions = {};
+  final Map<String, Timer> _autoRemoveTimers = {};
 
   @override
   JobState build() {
-    // Clean up subscription when notifier is disposed
+    // Clean up subscriptions when notifier is disposed
     ref.onDispose(() {
-      _sseSubscription?.cancel();
+      for (final subscription in _sseSubscriptions.values) {
+        subscription.cancel();
+      }
+      _sseSubscriptions.clear();
+      for (final timer in _autoRemoveTimers.values) {
+        timer.cancel();
+      }
+      _autoRemoveTimers.clear();
     });
 
     return JobState.idle();
@@ -28,14 +36,18 @@ class JobStateNotifier extends Notifier<JobState> {
 
   /// Upload an image to Talaria for analysis
   ///
-  /// Transitions state: idle -> uploading -> listening -> processing -> completed
-  /// On error, transitions to error state with error message
+  /// Adds a new job to the queue and starts processing
   Future<void> uploadImage(String imagePath) async {
     try {
-      // Update state to uploading
-      state = JobState.uploading(imagePath);
+      // Create new job in uploading state
+      final job = ScanJob.uploading(imagePath);
 
-      debugPrint('[JobStateNotifier] Uploading image: $imagePath');
+      // Add job to queue
+      state = state.copyWith(
+        jobs: [...state.jobs, job],
+      );
+
+      debugPrint('[JobStateNotifier] Created job ${job.id}: $imagePath');
 
       // Get TalariaClient from provider
       final client = await ref.read(talariaClientProvider.future);
@@ -43,34 +55,81 @@ class JobStateNotifier extends Notifier<JobState> {
       // Upload to Talaria
       final response = await client.uploadImage(imagePath);
 
-      debugPrint('[JobStateNotifier] Upload successful:');
+      debugPrint('[JobStateNotifier] Upload successful for job ${job.id}:');
       debugPrint('  - Job ID: ${response.jobId}');
       debugPrint('  - Stream URL: ${response.streamUrl}');
 
-      // Update state to listening
-      state = JobState.listening(
-        jobId: response.jobId,
-        streamUrl: response.streamUrl,
-        imagePath: imagePath,
+      // Update job to listening state
+      _updateJob(
+        job.id,
+        job.copyWith(
+          jobId: response.jobId,
+          streamUrl: response.streamUrl,
+          status: JobStatus.listening,
+        ),
       );
 
       // Start listening to SSE stream
-      await _listenToStream(response.jobId, response.streamUrl, imagePath);
+      await _listenToStream(job.id, response.jobId, response.streamUrl);
     } catch (e) {
       debugPrint('[JobStateNotifier] Upload failed: $e');
-      state = JobState.error(e.toString());
+      // Update the job to error state if it exists
+      final jobs = state.jobs;
+      if (jobs.isNotEmpty) {
+        final lastJob = jobs.last;
+        _updateJob(
+          lastJob.id,
+          lastJob.copyWith(
+            status: JobStatus.error,
+            errorMessage: e.toString(),
+          ),
+        );
+      }
     }
+  }
+
+  /// Update a job in the state
+  void _updateJob(String jobId, ScanJob updatedJob) {
+    final jobs = state.jobs;
+    final index = jobs.indexWhere((job) => job.id == jobId);
+    if (index != -1) {
+      final updatedJobs = List<ScanJob>.from(jobs);
+      updatedJobs[index] = updatedJob;
+      state = state.copyWith(jobs: updatedJobs);
+    }
+  }
+
+  /// Remove a job from the state
+  void _removeJob(String jobId) {
+    final jobs = state.jobs.where((job) => job.id != jobId).toList();
+    state = state.copyWith(jobs: jobs);
+
+    // Cancel any timers for this job
+    _autoRemoveTimers[jobId]?.cancel();
+    _autoRemoveTimers.remove(jobId);
+  }
+
+  /// Schedule auto-remove for a completed job
+  void _scheduleAutoRemove(String jobId) {
+    // Cancel any existing timer for this job
+    _autoRemoveTimers[jobId]?.cancel();
+
+    // Schedule removal after 5 seconds
+    _autoRemoveTimers[jobId] = Timer(const Duration(seconds: 5), () {
+      debugPrint('[JobStateNotifier] Auto-removing job $jobId');
+      _removeJob(jobId);
+    });
   }
 
   /// Listen to SSE stream for job updates
   Future<void> _listenToStream(
     String jobId,
+    String serverJobId,
     String streamUrl,
-    String imagePath,
   ) async {
     try {
-      // Cancel any existing subscription
-      await _sseSubscription?.cancel();
+      // Cancel any existing subscription for this job
+      await _sseSubscriptions[jobId]?.cancel();
 
       // Get SSE client from provider
       final sseClient = ref.read(sseClientProvider);
@@ -78,22 +137,40 @@ class JobStateNotifier extends Notifier<JobState> {
       debugPrint('[JobStateNotifier] Starting SSE stream for job: $jobId');
 
       // Listen to the stream
-      _sseSubscription = sseClient.listen(streamUrl).listen(
+      _sseSubscriptions[jobId] = sseClient.listen(streamUrl).listen(
         (event) {
-          _handleSseEvent(event, jobId, streamUrl, imagePath);
+          _handleSseEvent(event, jobId, serverJobId);
         },
         onError: (error) {
-          debugPrint('[JobStateNotifier] SSE stream error: $error');
-          state = JobState.error(error.toString());
+          debugPrint('[JobStateNotifier] SSE stream error for job $jobId: $error');
+          final job = state.getJobById(jobId);
+          if (job != null) {
+            _updateJob(
+              jobId,
+              job.copyWith(
+                status: JobStatus.error,
+                errorMessage: error.toString(),
+              ),
+            );
+          }
         },
         onDone: () {
-          debugPrint('[JobStateNotifier] SSE stream closed');
+          debugPrint('[JobStateNotifier] SSE stream closed for job $jobId');
         },
         cancelOnError: true,
       );
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to start SSE stream: $e');
-      state = JobState.error(e.toString());
+      final job = state.getJobById(jobId);
+      if (job != null) {
+        _updateJob(
+          jobId,
+          job.copyWith(
+            status: JobStatus.error,
+            errorMessage: e.toString(),
+          ),
+        );
+      }
     }
   }
 
@@ -101,48 +178,70 @@ class JobStateNotifier extends Notifier<JobState> {
   Future<void> _handleSseEvent(
     SseEvent event,
     String jobId,
-    String streamUrl,
-    String imagePath,
+    String serverJobId,
   ) async {
-    debugPrint('[JobStateNotifier] Handling SSE event: ${event.type}');
+    debugPrint('[JobStateNotifier] Handling SSE event for job $jobId: ${event.type}');
+
+    final job = state.getJobById(jobId);
+    if (job == null) {
+      debugPrint('[JobStateNotifier] Job $jobId not found, ignoring event');
+      return;
+    }
 
     switch (event.type) {
       case SseEventType.progress:
         final progress = event.data['progress'] as num? ?? 0.0;
-        state = JobState.processing(
-          jobId: jobId,
-          streamUrl: streamUrl,
-          imagePath: imagePath,
-          progress: progress.toDouble(),
+        _updateJob(
+          jobId,
+          job.copyWith(
+            status: JobStatus.processing,
+            progress: progress.toDouble(),
+          ),
         );
 
       case SseEventType.result:
         // Intermediate result - save to database and update state
         final resultData = event.data;
-        debugPrint('[JobStateNotifier] Received result: $resultData');
+        debugPrint('[JobStateNotifier] Received result for job $jobId: $resultData');
         await _saveBookResult(resultData);
-        state = state.copyWith(result: resultData);
+        _updateJob(
+          jobId,
+          job.copyWith(result: resultData),
+        );
 
       case SseEventType.complete:
         // Job completed successfully
         final resultData = event.data;
-        debugPrint('[JobStateNotifier] Job completed: $resultData');
-        state = JobState.completed(
-          jobId: jobId,
-          imagePath: imagePath,
-          result: resultData,
+        debugPrint('[JobStateNotifier] Job $jobId completed: $resultData');
+        _updateJob(
+          jobId,
+          job.copyWith(
+            status: JobStatus.completed,
+            result: resultData,
+          ),
         );
-        await _sseSubscription?.cancel();
+        await _sseSubscriptions[jobId]?.cancel();
+        _sseSubscriptions.remove(jobId);
 
         // Perform cleanup
-        await _cleanupJob(jobId, imagePath);
+        await _cleanupJob(serverJobId, job.imagePath);
+
+        // Schedule auto-remove after 5 seconds
+        _scheduleAutoRemove(jobId);
 
       case SseEventType.error:
         // Job failed with error
         final errorMessage = event.data['message'] as String? ?? 'Unknown error';
-        debugPrint('[JobStateNotifier] Job error: $errorMessage');
-        state = JobState.error(errorMessage);
-        _sseSubscription?.cancel();
+        debugPrint('[JobStateNotifier] Job $jobId error: $errorMessage');
+        _updateJob(
+          jobId,
+          job.copyWith(
+            status: JobStatus.error,
+            errorMessage: errorMessage,
+          ),
+        );
+        _sseSubscriptions[jobId]?.cancel();
+        _sseSubscriptions.remove(jobId);
     }
   }
 
@@ -245,8 +344,14 @@ class JobStateNotifier extends Notifier<JobState> {
 
   /// Reset state to idle
   void reset() {
-    _sseSubscription?.cancel();
-    _sseSubscription = null;
+    for (final subscription in _sseSubscriptions.values) {
+      subscription.cancel();
+    }
+    _sseSubscriptions.clear();
+    for (final timer in _autoRemoveTimers.values) {
+      timer.cancel();
+    }
+    _autoRemoveTimers.clear();
     state = JobState.idle();
   }
 }

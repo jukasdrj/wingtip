@@ -1,105 +1,106 @@
-/// Represents the state of a Talaria scan job
-class JobState {
-  final String? jobId;
+/// Represents a single Talaria scan job
+class ScanJob {
+  final String id; // Unique client-side ID
+  final String? jobId; // Server-side job ID
   final String? streamUrl;
-  final String? imagePath;
+  final String imagePath;
   final JobStatus status;
   final String? errorMessage;
   final double? progress;
   final Map<String, dynamic>? result;
+  final DateTime createdAt;
 
-  const JobState({
+  const ScanJob({
+    required this.id,
     this.jobId,
     this.streamUrl,
-    this.imagePath,
+    required this.imagePath,
     required this.status,
     this.errorMessage,
     this.progress,
     this.result,
+    required this.createdAt,
   });
 
-  factory JobState.idle() {
-    return const JobState(status: JobStatus.idle);
-  }
-
-  factory JobState.uploading(String imagePath) {
-    return JobState(
+  factory ScanJob.uploading(String imagePath) {
+    return ScanJob(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       status: JobStatus.uploading,
       imagePath: imagePath,
+      createdAt: DateTime.now(),
     );
   }
 
-  factory JobState.listening({
-    required String jobId,
-    required String streamUrl,
-    required String imagePath,
-  }) {
-    return JobState(
-      status: JobStatus.listening,
-      jobId: jobId,
-      streamUrl: streamUrl,
-      imagePath: imagePath,
-    );
-  }
-
-  factory JobState.processing({
-    required String jobId,
-    required String streamUrl,
-    required String imagePath,
-    required double progress,
-  }) {
-    return JobState(
-      status: JobStatus.processing,
-      jobId: jobId,
-      streamUrl: streamUrl,
-      imagePath: imagePath,
-      progress: progress,
-    );
-  }
-
-  factory JobState.completed({
-    required String jobId,
-    required String imagePath,
-    required Map<String, dynamic> result,
-  }) {
-    return JobState(
-      status: JobStatus.completed,
-      jobId: jobId,
-      imagePath: imagePath,
-      result: result,
-    );
-  }
-
-  factory JobState.error(String message) {
-    return JobState(
-      status: JobStatus.error,
-      errorMessage: message,
-    );
-  }
-
-  JobState copyWith({
+  ScanJob copyWith({
     String? jobId,
     String? streamUrl,
-    String? imagePath,
     JobStatus? status,
     String? errorMessage,
     double? progress,
     Map<String, dynamic>? result,
   }) {
-    return JobState(
+    return ScanJob(
+      id: id,
       jobId: jobId ?? this.jobId,
       streamUrl: streamUrl ?? this.streamUrl,
-      imagePath: imagePath ?? this.imagePath,
+      imagePath: imagePath,
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       progress: progress ?? this.progress,
       result: result ?? this.result,
+      createdAt: createdAt,
     );
   }
 }
 
+/// Represents the state of all Talaria scan jobs
+class JobState {
+  final List<ScanJob> jobs;
+
+  const JobState({
+    this.jobs = const [],
+  });
+
+  factory JobState.idle() {
+    return const JobState(jobs: []);
+  }
+
+  JobState copyWith({
+    List<ScanJob>? jobs,
+  }) {
+    return JobState(
+      jobs: jobs ?? this.jobs,
+    );
+  }
+
+  /// Get active jobs (not completed or error)
+  List<ScanJob> get activeJobs {
+    return jobs
+        .where((job) =>
+            job.status != JobStatus.completed && job.status != JobStatus.error)
+        .toList();
+  }
+
+  /// Get job by ID
+  ScanJob? getJobById(String id) {
+    try {
+      return jobs.firstWhere((job) => job.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get job by server job ID
+  ScanJob? getJobByJobId(String jobId) {
+    try {
+      return jobs.firstWhere((job) => job.jobId == jobId);
+    } catch (e) {
+      return null;
+    }
+  }
+}
+
 enum JobStatus {
-  idle,
   uploading,
   listening,
   processing,

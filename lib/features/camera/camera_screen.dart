@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
 import 'package:wingtip/features/camera/image_processor.dart';
+import 'package:wingtip/features/talaria/processing_stack_widget.dart';
 import 'package:wingtip/features/talaria/job_state_provider.dart';
 import 'package:wingtip/features/library/library_screen.dart';
 
@@ -74,8 +75,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         children: [
           _buildBody(cameraService),
           if (_showFlash) _buildFlashOverlay(),
-          if (cameraService.isInitialized && cameraService.controller != null)
+          if (cameraService.isInitialized && cameraService.controller != null) ...[
+            const ProcessingStackWidget(),
             _buildShutterButton(),
+          ],
           _buildLibraryButton(context),
         ],
       ),
