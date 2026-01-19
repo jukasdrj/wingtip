@@ -123,3 +123,56 @@ class SelectedBooksNotifier extends Notifier<Set<String>> {
 final selectedBooksProvider = NotifierProvider<SelectedBooksNotifier, Set<String>>(
   SelectedBooksNotifier.new,
 );
+
+// Failed scan select mode notifier
+class FailedScanSelectModeNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void enable() {
+    state = true;
+  }
+
+  void disable() {
+    state = false;
+    // Clear selected failed scans when exiting select mode
+    ref.read(selectedFailedScansProvider.notifier).clear();
+  }
+
+  void toggle() {
+    state = !state;
+    if (!state) {
+      ref.read(selectedFailedScansProvider.notifier).clear();
+    }
+  }
+}
+
+final failedScanSelectModeProvider = NotifierProvider<FailedScanSelectModeNotifier, bool>(
+  FailedScanSelectModeNotifier.new,
+);
+
+// Selected failed scans notifier (uses jobId as identifier)
+class SelectedFailedScansNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => {};
+
+  void toggle(String jobId) {
+    if (state.contains(jobId)) {
+      state = {...state}..remove(jobId);
+    } else {
+      state = {...state, jobId};
+    }
+  }
+
+  void clear() {
+    state = {};
+  }
+
+  void selectAll(List<String> jobIds) {
+    state = {...jobIds};
+  }
+}
+
+final selectedFailedScansProvider = NotifierProvider<SelectedFailedScansNotifier, Set<String>>(
+  SelectedFailedScansNotifier.new,
+);

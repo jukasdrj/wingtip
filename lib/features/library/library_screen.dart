@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -95,40 +96,181 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     }
   }
 
+  Future<void> _showDeleteFailedScansConfirmation(BuildContext context, int count, List<FailedScan> allScans) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.borderGray,
+        title: Text(
+          'Delete $count failed ${count == 1 ? 'scan' : 'scans'}?',
+          style: const TextStyle(color: AppTheme.textPrimary),
+        ),
+        content: Text(
+          'This action cannot be undone.',
+          style: const TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppTheme.internationalOrange),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final selectedJobIds = ref.read(selectedFailedScansProvider);
+
+      // Find scans to delete based on selected job IDs
+      final scansToDelete = allScans.where((scan) => selectedJobIds.contains(scan.jobId)).toList();
+
+      final repository = ref.read(failedScansRepositoryProvider);
+
+      // Delete each failed scan
+      for (final scan in scansToDelete) {
+        await repository.deleteFailedScan(scan.id);
+      }
+
+      ref.read(failedScanSelectModeProvider.notifier).disable();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleted $count failed ${count == 1 ? 'scan' : 'scans'}'),
+            backgroundColor: AppTheme.borderGray,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showClearAllFailedScansConfirmation(BuildContext context, int count) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.borderGray,
+        title: Text(
+          'Delete all $count failed ${count == 1 ? 'scan' : 'scans'}?',
+          style: const TextStyle(color: AppTheme.textPrimary),
+        ),
+        content: Text(
+          'This action cannot be undone.',
+          style: const TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppTheme.internationalOrange),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final repository = ref.read(failedScansRepositoryProvider);
+      await repository.clearAllFailedScans();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleted all $count failed ${count == 1 ? 'scan' : 'scans'}'),
+            backgroundColor: AppTheme.borderGray,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final booksAsync = ref.watch(booksProvider);
     final failedScansAsync = ref.watch(watchFailedScansProvider);
     final selectMode = ref.watch(selectModeProvider);
     final selectedBooks = ref.watch(selectedBooksProvider);
+    final failedScanSelectMode = ref.watch(failedScanSelectModeProvider);
+    final selectedFailedScans = ref.watch(selectedFailedScansProvider);
 
     final failedScansCount = failedScansAsync.maybeWhen(
       data: (scans) => scans.length,
       orElse: () => 0,
     );
 
+    // Determine which mode is active and show appropriate title/actions
+    final String appBarTitle;
+    final Widget? appBarLeading;
+    final List<Widget>? appBarActions;
+
+    if (selectMode) {
+      appBarTitle = '${selectedBooks.length} selected';
+      appBarLeading = IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: () {
+          ref.read(selectModeProvider.notifier).disable();
+        },
+      );
+      appBarActions = selectedBooks.isNotEmpty
+          ? [
+              IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () => _showDeleteConfirmation(context, selectedBooks.length),
+              ),
+            ]
+          : null;
+    } else if (failedScanSelectMode) {
+      appBarTitle = '${selectedFailedScans.length} selected';
+      appBarLeading = IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: () {
+          ref.read(failedScanSelectModeProvider.notifier).disable();
+        },
+      );
+      appBarActions = selectedFailedScans.isNotEmpty
+          ? [
+              IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () {
+                  // Get the current scans from the async value
+                  failedScansAsync.whenData((scans) {
+                    _showDeleteFailedScansConfirmation(context, selectedFailedScans.length, scans);
+                  });
+                },
+              ),
+            ]
+          : null;
+    } else {
+      appBarTitle = 'Library';
+      appBarLeading = null;
+      appBarActions = null;
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.oledBlack,
       appBar: AppBar(
-        title: Text(selectMode ? '${selectedBooks.length} selected' : 'Library'),
+        title: Text(appBarTitle),
         backgroundColor: AppTheme.oledBlack,
         elevation: 0,
-        leading: selectMode
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () {
-                  ref.read(selectModeProvider.notifier).disable();
-                },
-              )
-            : null,
-        actions: selectMode && selectedBooks.isNotEmpty
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _showDeleteConfirmation(context, selectedBooks.length),
-                ),
-              ]
-            : null,
+        leading: appBarLeading,
+        actions: appBarActions,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(49),
           child: Column(
@@ -370,24 +512,93 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           );
         }
 
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: scans.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final scan = scans[index];
-            return failed_card.FailedScanCard(
-              failedScan: scan,
-              onRetry: () async {
-                // Trigger retry via JobStateNotifier
-                await ref.read(jobStateProvider.notifier).retryFailedScan(scan.jobId);
-              },
-              onDelete: () async {
-                // Delete the failed scan
-                await ref.read(failedScansRepositoryProvider).deleteFailedScan(scan.id);
-              },
-            );
-          },
+        final failedScanSelectMode = ref.watch(failedScanSelectModeProvider);
+
+        return Column(
+          children: [
+            // Batch action buttons at top (hidden in select mode)
+            if (!failedScanSelectMode)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Retry All button
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          HapticFeedback.lightImpact();
+                          // Retry all failed scans
+                          for (final scan in scans) {
+                            await ref.read(jobStateProvider.notifier).retryFailedScan(scan.jobId);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.internationalOrange,
+                          foregroundColor: AppTheme.textPrimary,
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            side: const BorderSide(
+                              color: AppTheme.internationalOrange,
+                              width: 1.0,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Retry All'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Clear All Failed button
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          HapticFeedback.lightImpact();
+                          await _showClearAllFailedScansConfirmation(context, scans.length);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.textSecondary,
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                          side: const BorderSide(
+                            color: AppTheme.borderGray,
+                            width: 1.0,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Clear All Failed'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            // Failed scans list
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: scans.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final scan = scans[index];
+                  return failed_card.FailedScanCard(
+                    failedScan: scan,
+                    onRetry: () async {
+                      // Trigger retry via JobStateNotifier
+                      await ref.read(jobStateProvider.notifier).retryFailedScan(scan.jobId);
+                    },
+                    onDelete: () async {
+                      // Delete the failed scan
+                      await ref.read(failedScansRepositoryProvider).deleteFailedScan(scan.id);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
       loading: () => const Center(
