@@ -27,3 +27,12 @@ n.dart)**\n- Wrapped book cover images with Hero widget (tag: `book-cover-${isbn
 fields when updating\n\n- **Widget Tests** - Created `test/features/library/edit_book_screen_test.dart`\n  - Display book data in form fields\n  - Validation errors for empty required fields\n  - Update book and navigate back on save\n  - Handle optional format field\n  - Display correct title and close functionality\n\n### Quality Checks\n- ✅ `flutter analyze` - No issues found\n- ✅ `flutter test` - All new tests passing (150+ total tests, 3 pre-existing failures unrelated to this feature)\n\n
 
 ---
+## ✓ Iteration 3 - US-155: Matrix-Style Stream Overlay
+*2026-01-19T16:01:36.354Z (104s)*
+
+**Status:** Completed
+
+**Notes:**
+fade in/out with 200ms transitions\n- ✅ Auto-dismisses 3 seconds after last message\n- ✅ Tappable to manually dismiss\n- ✅ `flutter analyze` shows no errors\n\n### Manual Verification Notes\n\nThe overlay will display real-time SSE messages such as:\n- \"Analyzing...\"\n- \"Found 12 spines...\"\n- \"Enriching The Martian...\"\n\nThese messages come from the `progressMessage` field in the `ScanJob` state, which is populated by SSE progress events handled in `job_state_notifier.dart:551-560`.\n\n
+
+---

@@ -680,14 +680,14 @@ class _AnimatedBookCardState extends State<AnimatedBookCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
 
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 300),
       vsync: this,
     );
 
@@ -699,9 +699,9 @@ class _AnimatedBookCardState extends State<AnimatedBookCard>
       curve: Curves.easeOut,
     ));
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
+    _scaleAnimation = Tween<double>(
+      begin: 0.85,
+      end: 1.0,
     ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOut,
@@ -725,33 +725,91 @@ class _AnimatedBookCardState extends State<AnimatedBookCard>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: SlideTransition(
-        position: _slideAnimation,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
         child: BookCard(book: widget.book),
       ),
     );
   }
 }
 
-class BookCard extends ConsumerWidget {
+class BookCard extends ConsumerStatefulWidget {
   final Book book;
 
   const BookCard({super.key, required this.book});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BookCard> createState() => _BookCardState();
+}
+
+class _BookCardState extends ConsumerState<BookCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _coverAnimationController;
+  late Animation<double> _coverFadeAnimation;
+  late Animation<double> _coverScaleAnimation;
+  bool _imageLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _coverAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+
+    _coverFadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _coverAnimationController,
+      curve: Curves.easeOut,
+    ));
+
+    _coverScaleAnimation = Tween<double>(
+      begin: 0.92,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _coverAnimationController,
+      curve: Curves.easeOut,
+    ));
+
+    // Start animation immediately if no cover URL
+    if (widget.book.coverUrl == null || widget.book.coverUrl!.isEmpty) {
+      _coverAnimationController.value = 1.0;
+      _imageLoaded = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _coverAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _onImageLoaded() {
+    if (!_imageLoaded && mounted) {
+      setState(() {
+        _imageLoaded = true;
+      });
+      _coverAnimationController.forward();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selectMode = ref.watch(selectModeProvider);
     final selectedBooks = ref.watch(selectedBooksProvider);
-    final isSelected = selectedBooks.contains(book.isbn);
+    final isSelected = selectedBooks.contains(widget.book.isbn);
 
     return GestureDetector(
       onTap: () {
         if (selectMode) {
-          ref.read(selectedBooksProvider.notifier).toggle(book.isbn);
+          ref.read(selectedBooksProvider.notifier).toggle(widget.book.isbn);
         } else {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (context) => BookDetailScreen(book: book),
+              builder: (context) => BookDetailScreen(book: widget.book),
             ),
           );
         }
@@ -759,7 +817,7 @@ class BookCard extends ConsumerWidget {
       onLongPress: () {
         if (!selectMode) {
           ref.read(selectModeProvider.notifier).enable();
-          ref.read(selectedBooksProvider.notifier).toggle(book.isbn);
+          ref.read(selectedBooksProvider.notifier).toggle(widget.book.isbn);
         }
       },
       child: Container(
@@ -777,26 +835,42 @@ class BookCard extends ConsumerWidget {
             child: Stack(
               children: [
                 Hero(
-                  tag: 'book-cover-${book.isbn}',
-                  child: book.coverUrl != null && book.coverUrl!.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: book.coverUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            color: AppTheme.borderGray,
-                            child: const Center(
-                              child: CircularProgressIndicator(
-                                color: AppTheme.internationalOrange,
-                                strokeWidth: 2,
+                  tag: 'book-cover-${widget.book.isbn}',
+                  child: widget.book.coverUrl != null && widget.book.coverUrl!.isNotEmpty
+                      ? FadeTransition(
+                          opacity: _coverFadeAnimation,
+                          child: ScaleTransition(
+                            scale: _coverScaleAnimation,
+                            child: CachedNetworkImage(
+                              imageUrl: widget.book.coverUrl!,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: AppTheme.borderGray,
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: AppTheme.internationalOrange,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
                               ),
+                              errorWidget: (context, url, error) => _buildFallbackCard(),
+                              imageBuilder: (context, imageProvider) {
+                                // Trigger animation when image loads
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  _onImageLoaded();
+                                });
+                                return Image(
+                                  image: imageProvider,
+                                  fit: BoxFit.cover,
+                                );
+                              },
                             ),
                           ),
-                          errorWidget: (context, url, error) => _buildFallbackCard(),
                         )
                       : _buildFallbackCard(),
                 ),
                 // Review needed indicator
-                if (book.reviewNeeded && !selectMode)
+                if (widget.book.reviewNeeded && !selectMode)
                   Positioned(
                     top: 4,
                     right: 4,
@@ -857,7 +931,7 @@ class BookCard extends ConsumerWidget {
         children: [
           Flexible(
             child: Text(
-              book.title,
+              widget.book.title,
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -872,7 +946,7 @@ class BookCard extends ConsumerWidget {
           const SizedBox(height: 8),
           Flexible(
             child: Text(
-              book.author,
+              widget.book.author,
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 10,
                 fontWeight: FontWeight.w400,
