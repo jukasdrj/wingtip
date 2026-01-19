@@ -18,6 +18,84 @@ class CameraScreen extends ConsumerStatefulWidget {
 
 class _CameraScreenState extends ConsumerState<CameraScreen> {
   bool _showFlash = false;
+  double _currentZoom = 1.0;
+  double _minZoom = 1.0;
+  double _maxZoom = 4.0;
+  double _baseScale = 1.0;
+  Offset? _focusPoint;
+  bool _showFocusIndicator = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeZoomLevels();
+  }
+
+  Future<void> _initializeZoomLevels() async {
+    final cameraService = ref.read(cameraServiceProvider);
+    if (cameraService.controller != null) {
+      final maxZoom = await cameraService.controller!.getMaxZoomLevel();
+      final minZoom = await cameraService.controller!.getMinZoomLevel();
+      setState(() {
+        _maxZoom = maxZoom.clamp(1.0, 4.0);
+        _minZoom = minZoom;
+      });
+    }
+  }
+
+  void _handleScaleStart(ScaleStartDetails details) {
+    _baseScale = _currentZoom;
+  }
+
+  void _handleScaleUpdate(ScaleUpdateDetails details) {
+    final cameraService = ref.read(cameraServiceProvider);
+    if (cameraService.controller == null) return;
+
+    final newZoom = (_baseScale * details.scale).clamp(_minZoom, _maxZoom);
+    if (newZoom != _currentZoom) {
+      setState(() {
+        _currentZoom = newZoom;
+      });
+      cameraService.controller!.setZoomLevel(_currentZoom);
+    }
+  }
+
+  void _handleTapUp(TapUpDetails details, BoxConstraints constraints) async {
+    final cameraService = ref.read(cameraServiceProvider);
+    if (cameraService.controller == null) return;
+
+    // Get tap position relative to the preview
+    final offset = Offset(
+      details.localPosition.dx / constraints.maxWidth,
+      details.localPosition.dy / constraints.maxHeight,
+    );
+
+    try {
+      // Set focus point
+      await cameraService.controller!.setFocusPoint(offset);
+      await cameraService.controller!.setExposurePoint(offset);
+
+      // Show focus indicator
+      setState(() {
+        _focusPoint = details.localPosition;
+        _showFocusIndicator = true;
+      });
+
+      // Trigger haptic feedback
+      HapticFeedback.selectionClick();
+
+      // Hide focus indicator after 1 second
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          setState(() {
+            _showFocusIndicator = false;
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint('[CameraScreen] Error setting focus: $e');
+    }
+  }
 
   Future<void> _onShutterTap() async {
     // Trigger haptic feedback immediately
@@ -78,6 +156,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           if (cameraService.isInitialized && cameraService.controller != null) ...[
             const ProcessingStackWidget(),
             _buildShutterButton(),
+            _buildZoomIndicator(),
+            if (_showFocusIndicator && _focusPoint != null)
+              _buildFocusIndicator(),
           ],
           _buildLibraryButton(context),
         ],
@@ -107,7 +188,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       );
     }
 
-    return CameraPreview(cameraService.controller!);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          onScaleStart: _handleScaleStart,
+          onScaleUpdate: _handleScaleUpdate,
+          onTapUp: (details) => _handleTapUp(details, constraints),
+          child: CameraPreview(cameraService.controller!),
+        );
+      },
+    );
   }
 
   Widget _buildFlashOverlay() {
@@ -178,4 +268,160 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       ),
     );
   }
+
+  Widget _buildZoomIndicator() {
+    return Positioned(
+      top: 48,
+      left: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          '${_currentZoom.toStringAsFixed(1)}x',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFocusIndicator() {
+    return Positioned(
+      left: _focusPoint!.dx - 30,
+      top: _focusPoint!.dy - 30,
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          opacity: _showFocusIndicator ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          child: Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Colors.white,
+                width: 2,
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Top-left bracket
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: CustomPaint(
+                    size: const Size(12, 12),
+                    painter: _BracketPainter(
+                      color: Colors.white,
+                      position: BracketPosition.topLeft,
+                    ),
+                  ),
+                ),
+                // Top-right bracket
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: CustomPaint(
+                    size: const Size(12, 12),
+                    painter: _BracketPainter(
+                      color: Colors.white,
+                      position: BracketPosition.topRight,
+                    ),
+                  ),
+                ),
+                // Bottom-left bracket
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: CustomPaint(
+                    size: const Size(12, 12),
+                    painter: _BracketPainter(
+                      color: Colors.white,
+                      position: BracketPosition.bottomLeft,
+                    ),
+                  ),
+                ),
+                // Bottom-right bracket
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: CustomPaint(
+                    size: const Size(12, 12),
+                    painter: _BracketPainter(
+                      color: Colors.white,
+                      position: BracketPosition.bottomRight,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum BracketPosition {
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+}
+
+class _BracketPainter extends CustomPainter {
+  final Color color;
+  final BracketPosition position;
+
+  _BracketPainter({
+    required this.color,
+    required this.position,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+
+    switch (position) {
+      case BracketPosition.topLeft:
+        path.moveTo(size.width, 0);
+        path.lineTo(0, 0);
+        path.lineTo(0, size.height);
+        break;
+      case BracketPosition.topRight:
+        path.moveTo(0, 0);
+        path.lineTo(size.width, 0);
+        path.lineTo(size.width, size.height);
+        break;
+      case BracketPosition.bottomLeft:
+        path.moveTo(0, 0);
+        path.lineTo(0, size.height);
+        path.lineTo(size.width, size.height);
+        break;
+      case BracketPosition.bottomRight:
+        path.moveTo(size.width, 0);
+        path.lineTo(size.width, size.height);
+        path.lineTo(0, size.height);
+        break;
+    }
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
