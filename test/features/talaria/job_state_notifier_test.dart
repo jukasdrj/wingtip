@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingtip/data/database.dart';
 import 'package:wingtip/data/database_provider.dart';
+import 'package:wingtip/features/talaria/job_state.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -287,6 +288,98 @@ void main() {
 
       // Should complete without error
       expect(await testFile.exists(), false);
+    });
+  });
+
+  group('RateLimitInfo', () {
+    test('should correctly calculate if rate limit is active', () {
+      final futureTime = DateTime.now().add(const Duration(seconds: 30));
+      final rateLimit = RateLimitInfo(
+        expiresAt: futureTime,
+        retryAfterMs: 30000,
+      );
+
+      expect(rateLimit.isActive, true);
+    });
+
+    test('should correctly calculate if rate limit is expired', () {
+      final pastTime = DateTime.now().subtract(const Duration(seconds: 1));
+      final rateLimit = RateLimitInfo(
+        expiresAt: pastTime,
+        retryAfterMs: 60000,
+      );
+
+      expect(rateLimit.isActive, false);
+    });
+
+    test('should calculate remaining milliseconds correctly', () {
+      final futureTime = DateTime.now().add(const Duration(seconds: 45));
+      final rateLimit = RateLimitInfo(
+        expiresAt: futureTime,
+        retryAfterMs: 45000,
+      );
+
+      final remainingMs = rateLimit.remainingMs;
+      expect(remainingMs, greaterThan(44000));
+      expect(remainingMs, lessThanOrEqualTo(45000));
+    });
+
+    test('should return 0 for remaining time when expired', () {
+      final pastTime = DateTime.now().subtract(const Duration(seconds: 5));
+      final rateLimit = RateLimitInfo(
+        expiresAt: pastTime,
+        retryAfterMs: 60000,
+      );
+
+      expect(rateLimit.remainingMs, 0);
+    });
+  });
+
+  group('JobState - Rate Limit', () {
+    test('should create idle state without rate limit', () {
+      final state = JobState.idle();
+      expect(state.rateLimit, isNull);
+      expect(state.jobs, isEmpty);
+    });
+
+    test('should copy state with rate limit', () {
+      final state = JobState.idle();
+      final rateLimit = RateLimitInfo(
+        expiresAt: DateTime.now().add(const Duration(seconds: 60)),
+        retryAfterMs: 60000,
+      );
+
+      final newState = state.copyWith(rateLimit: rateLimit);
+      expect(newState.rateLimit != null, true);
+      expect(newState.rateLimit?.retryAfterMs, 60000);
+    });
+
+    test('should clear rate limit', () {
+      final rateLimit = RateLimitInfo(
+        expiresAt: DateTime.now().add(const Duration(seconds: 60)),
+        retryAfterMs: 60000,
+      );
+
+      final state = JobState(rateLimit: rateLimit);
+      expect(state.rateLimit != null, true);
+
+      final clearedState = state.clearRateLimit();
+      expect(clearedState.rateLimit, isNull);
+    });
+
+    test('should preserve jobs when clearing rate limit', () {
+      final job = ScanJob.uploading('/path/to/image.jpg');
+      final rateLimit = RateLimitInfo(
+        expiresAt: DateTime.now().add(const Duration(seconds: 60)),
+        retryAfterMs: 60000,
+      );
+
+      final state = JobState(jobs: [job], rateLimit: rateLimit);
+      final clearedState = state.clearRateLimit();
+
+      expect(clearedState.jobs.length, 1);
+      expect(clearedState.jobs.first.id, job.id);
+      expect(clearedState.rateLimit, isNull);
     });
   });
 }

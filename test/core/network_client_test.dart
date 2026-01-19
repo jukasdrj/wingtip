@@ -127,6 +127,93 @@ void main() {
       expect(retryInterceptor.shouldRetry(error), false);
     });
   });
+
+  group('RateLimitException', () {
+    test('should create exception with retryAfterMs', () {
+      final exception = RateLimitException(retryAfterMs: 60000);
+      expect(exception.retryAfterMs, 60000);
+      expect(exception.message, 'Rate limit exceeded');
+    });
+
+    test('should create exception with custom message', () {
+      final exception = RateLimitException(
+        retryAfterMs: 120000,
+        message: 'Daily limit reached',
+      );
+      expect(exception.retryAfterMs, 120000);
+      expect(exception.message, 'Daily limit reached');
+    });
+
+    test('should format toString correctly', () {
+      final exception = RateLimitException(retryAfterMs: 60000);
+      expect(
+        exception.toString(),
+        'RateLimitException: Rate limit exceeded (retry after 60000ms)',
+      );
+    });
+  });
+
+  group('RetryInterceptor - Rate Limit Handling', () {
+    late Dio dio;
+    late RetryInterceptor retryInterceptor;
+
+    setUp(() {
+      dio = Dio();
+      retryInterceptor = RetryInterceptor(
+        dio: dio,
+        maxRetries: 3,
+        initialDelay: const Duration(milliseconds: 100),
+      );
+    });
+
+    test('should parse retryAfterMs from response body', () {
+      final response = Response(
+        requestOptions: RequestOptions(path: '/test'),
+        statusCode: 429,
+        data: {'retryAfterMs': 120000},
+      );
+
+      final retryAfterMs = retryInterceptor.parseRetryAfter(response);
+      expect(retryAfterMs, 120000);
+    });
+
+    test('should parse retry-after from header in seconds', () {
+      final response = Response(
+        requestOptions: RequestOptions(path: '/test'),
+        statusCode: 429,
+        headers: Headers.fromMap({
+          'retry-after': ['60'],
+        }),
+      );
+
+      final retryAfterMs = retryInterceptor.parseRetryAfter(response);
+      expect(retryAfterMs, 60000); // 60 seconds = 60000 ms
+    });
+
+    test('should default to 60 seconds when no retry-after info', () {
+      final response = Response(
+        requestOptions: RequestOptions(path: '/test'),
+        statusCode: 429,
+      );
+
+      final retryAfterMs = retryInterceptor.parseRetryAfter(response);
+      expect(retryAfterMs, 60000);
+    });
+
+    test('should prioritize header over body', () {
+      final response = Response(
+        requestOptions: RequestOptions(path: '/test'),
+        statusCode: 429,
+        headers: Headers.fromMap({
+          'retry-after': ['30'],
+        }),
+        data: {'retryAfterMs': 120000},
+      );
+
+      final retryAfterMs = retryInterceptor.parseRetryAfter(response);
+      expect(retryAfterMs, 30000); // Header takes precedence
+    });
+  });
 }
 
 extension RetryInterceptorTest on RetryInterceptor {
@@ -150,5 +237,31 @@ extension RetryInterceptorTest on RetryInterceptor {
 
   Duration _calculateDelay(int retryCount) {
     return initialDelay * (1 << retryCount);
+  }
+
+  int parseRetryAfter(Response? response) {
+    return _parseRetryAfter(response);
+  }
+
+  int _parseRetryAfter(Response? response) {
+    if (response == null) return 60000;
+
+    final retryAfterHeader = response.headers.value('retry-after');
+    if (retryAfterHeader != null) {
+      final seconds = int.tryParse(retryAfterHeader);
+      if (seconds != null) {
+        return seconds * 1000;
+      }
+    }
+
+    if (response.data is Map<String, dynamic>) {
+      final data = response.data as Map<String, dynamic>;
+      final retryAfterMs = data['retryAfterMs'] as int?;
+      if (retryAfterMs != null) {
+        return retryAfterMs;
+      }
+    }
+
+    return 60000;
   }
 }

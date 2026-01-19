@@ -57,12 +57,32 @@ class ScanJob {
   }
 }
 
+/// Rate limit information
+class RateLimitInfo {
+  final DateTime expiresAt;
+  final int retryAfterMs;
+
+  const RateLimitInfo({
+    required this.expiresAt,
+    required this.retryAfterMs,
+  });
+
+  bool get isActive => DateTime.now().isBefore(expiresAt);
+
+  int get remainingMs {
+    final remaining = expiresAt.difference(DateTime.now()).inMilliseconds;
+    return remaining > 0 ? remaining : 0;
+  }
+}
+
 /// Represents the state of all Talaria scan jobs
 class JobState {
   final List<ScanJob> jobs;
+  final RateLimitInfo? rateLimit;
 
   const JobState({
     this.jobs = const [],
+    this.rateLimit,
   });
 
   factory JobState.idle() {
@@ -71,9 +91,18 @@ class JobState {
 
   JobState copyWith({
     List<ScanJob>? jobs,
+    RateLimitInfo? rateLimit,
   }) {
     return JobState(
       jobs: jobs ?? this.jobs,
+      rateLimit: rateLimit ?? this.rateLimit,
+    );
+  }
+
+  JobState clearRateLimit() {
+    return JobState(
+      jobs: jobs,
+      rateLimit: null,
     );
   }
 

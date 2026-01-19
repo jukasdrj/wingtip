@@ -16,6 +16,7 @@ import 'package:wingtip/features/talaria/job_state.dart';
 class JobStateNotifier extends Notifier<JobState> {
   final Map<String, StreamSubscription<SseEvent>> _sseSubscriptions = {};
   final Map<String, Timer> _autoRemoveTimers = {};
+  Timer? _rateLimitTimer;
 
   @override
   JobState build() {
@@ -29,6 +30,7 @@ class JobStateNotifier extends Notifier<JobState> {
         timer.cancel();
       }
       _autoRemoveTimers.clear();
+      _rateLimitTimer?.cancel();
     });
 
     return JobState.idle();
@@ -73,19 +75,62 @@ class JobStateNotifier extends Notifier<JobState> {
       await _listenToStream(job.id, response.jobId, response.streamUrl);
     } catch (e) {
       debugPrint('[JobStateNotifier] Upload failed: $e');
-      // Update the job to error state if it exists
-      final jobs = state.jobs;
-      if (jobs.isNotEmpty) {
-        final lastJob = jobs.last;
-        _updateJob(
-          lastJob.id,
-          lastJob.copyWith(
-            status: JobStatus.error,
-            errorMessage: e.toString(),
-          ),
-        );
+
+      // Check if this is a rate limit exception
+      if (e.toString().contains('RateLimitException')) {
+        _handleRateLimitError(e);
+      } else {
+        // Update the job to error state if it exists
+        final jobs = state.jobs;
+        if (jobs.isNotEmpty) {
+          final lastJob = jobs.last;
+          _updateJob(
+            lastJob.id,
+            lastJob.copyWith(
+              status: JobStatus.error,
+              errorMessage: e.toString(),
+            ),
+          );
+        }
       }
     }
+  }
+
+  /// Handle rate limit error
+  void _handleRateLimitError(dynamic error) {
+    debugPrint('[JobStateNotifier] Rate limit hit: $error');
+
+    // Extract retryAfterMs from error message
+    int retryAfterMs = 60000; // Default 60 seconds
+
+    // Try to parse retryAfterMs from error string
+    final errorStr = error.toString();
+    final match = RegExp(r'retry after (\d+)ms').firstMatch(errorStr);
+    if (match != null) {
+      retryAfterMs = int.tryParse(match.group(1) ?? '') ?? 60000;
+    }
+
+    // Set rate limit state
+    final expiresAt = DateTime.now().add(Duration(milliseconds: retryAfterMs));
+    state = state.copyWith(
+      rateLimit: RateLimitInfo(
+        expiresAt: expiresAt,
+        retryAfterMs: retryAfterMs,
+      ),
+    );
+
+    // Remove the failed job from the queue
+    if (state.jobs.isNotEmpty) {
+      final lastJob = state.jobs.last;
+      _removeJob(lastJob.id);
+    }
+
+    // Schedule rate limit clear
+    _rateLimitTimer?.cancel();
+    _rateLimitTimer = Timer(Duration(milliseconds: retryAfterMs), () {
+      debugPrint('[JobStateNotifier] Rate limit expired, clearing');
+      state = state.clearRateLimit();
+    });
   }
 
   /// Update a job in the state

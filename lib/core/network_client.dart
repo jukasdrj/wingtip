@@ -1,5 +1,19 @@
 import 'package:dio/dio.dart';
 
+/// Exception thrown when a rate limit is hit
+class RateLimitException implements Exception {
+  final int retryAfterMs;
+  final String message;
+
+  RateLimitException({
+    required this.retryAfterMs,
+    this.message = 'Rate limit exceeded',
+  });
+
+  @override
+  String toString() => 'RateLimitException: $message (retry after ${retryAfterMs}ms)';
+}
+
 class NetworkClient {
   late final Dio _dio;
 
@@ -34,6 +48,20 @@ class RetryInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
+    // Check for 429 rate limit response
+    if (err.response?.statusCode == 429) {
+      final retryAfterMs = _parseRetryAfter(err.response);
+      handler.reject(
+        DioException(
+          requestOptions: err.requestOptions,
+          response: err.response,
+          type: err.type,
+          error: RateLimitException(retryAfterMs: retryAfterMs),
+        ),
+      );
+      return;
+    }
+
     if (_shouldRetry(err)) {
       final retryCount = err.requestOptions.extra['retryCount'] as int? ?? 0;
 
@@ -53,6 +81,32 @@ class RetryInterceptor extends Interceptor {
     }
 
     return super.onError(err, handler);
+  }
+
+  /// Parse retry-after from response headers or body
+  int _parseRetryAfter(Response? response) {
+    if (response == null) return 60000; // Default 60 seconds
+
+    // Try to get from Retry-After header (in seconds)
+    final retryAfterHeader = response.headers.value('retry-after');
+    if (retryAfterHeader != null) {
+      final seconds = int.tryParse(retryAfterHeader);
+      if (seconds != null) {
+        return seconds * 1000; // Convert to milliseconds
+      }
+    }
+
+    // Try to get from response body
+    if (response.data is Map<String, dynamic>) {
+      final data = response.data as Map<String, dynamic>;
+      final retryAfterMs = data['retryAfterMs'] as int?;
+      if (retryAfterMs != null) {
+        return retryAfterMs;
+      }
+    }
+
+    // Default to 60 seconds if not found
+    return 60000;
   }
 
   bool _shouldRetry(DioException err) {

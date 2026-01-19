@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,11 +25,30 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   double _baseScale = 1.0;
   Offset? _focusPoint;
   bool _showFocusIndicator = false;
+  Timer? _countdownTimer;
 
   @override
   void initState() {
     super.initState();
     _initializeZoomLevels();
+    _startCountdownTimer();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startCountdownTimer() {
+    // Update countdown every second
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          // Trigger rebuild to update countdown display
+        });
+      }
+    });
   }
 
   Future<void> _initializeZoomLevels() async {
@@ -161,6 +181,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
               _buildFocusIndicator(),
           ],
           _buildLibraryButton(context),
+          _buildRateLimitOverlay(),
         ],
       ),
     );
@@ -213,20 +234,23 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   Widget _buildShutterButton() {
+    final jobState = ref.watch(jobStateProvider);
+    final isRateLimited = jobState.rateLimit?.isActive ?? false;
+
     return Positioned(
       left: 0,
       right: 0,
       bottom: 40,
       child: Center(
         child: GestureDetector(
-          onTap: _onShutterTap,
+          onTap: isRateLimited ? null : _onShutterTap,
           child: Container(
             width: 80,
             height: 80,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white,
+                color: isRateLimited ? Colors.white.withValues(alpha: 0.3) : Colors.white,
                 width: 4,
               ),
             ),
@@ -360,6 +384,74 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                       color: Colors.white,
                       position: BracketPosition.bottomRight,
                     ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRateLimitOverlay() {
+    final jobState = ref.watch(jobStateProvider);
+    final rateLimit = jobState.rateLimit;
+
+    if (rateLimit == null || !rateLimit.isActive) {
+      return const SizedBox.shrink();
+    }
+
+    final remainingMs = rateLimit.remainingMs;
+    final hours = remainingMs ~/ (1000 * 60 * 60);
+    final minutes = (remainingMs % (1000 * 60 * 60)) ~/ (1000 * 60);
+    final seconds = (remainingMs % (1000 * 60)) ~/ 1000;
+
+    final timeString = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.7),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'LIMIT REACHED',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'RESETS IN',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  timeString,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
               ],
