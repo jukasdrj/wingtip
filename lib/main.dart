@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/core/app_lifecycle_observer.dart';
 import 'package:wingtip/core/performance_metrics_service.dart';
+import 'package:wingtip/core/performance_overlay_provider.dart';
 import 'package:wingtip/core/restart_widget.dart';
 import 'package:wingtip/features/camera/camera_screen.dart';
 import 'package:wingtip/features/camera/camera_service.dart';
@@ -120,12 +121,17 @@ class _MyAppState extends State<MyApp> {
           WidgetsBinding.instance.addObserver(_lifecycleObserver!);
         }
 
+        // Watch performance overlay state
+        final showPerformanceOverlay = ref.watch(performanceOverlayProvider);
+
         return NetworkReconnectListener(
           child: MaterialApp(
             title: 'Wingtip',
             // Lock to dark theme with Swiss Utility styling
             theme: AppTheme.darkTheme,
             themeMode: ThemeMode.dark,
+            // Enable performance overlay for ProMotion profiling
+            showPerformanceOverlay: showPerformanceOverlay,
             // Show permission primer if not granted, otherwise camera screen
             home: widget.hasPermission ? const CameraScreen() : const PermissionPrimerScreen(),
           ),

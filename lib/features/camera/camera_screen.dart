@@ -306,7 +306,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           onScaleStart: _handleScaleStart,
           onScaleUpdate: _handleScaleUpdate,
           onTapUp: (details) => _handleTapUp(details, constraints),
-          child: CameraPreview(cameraService.controller!),
+          child: RepaintBoundary(
+            // Isolate camera preview to avoid unnecessary repaints
+            child: CameraPreview(cameraService.controller!),
+          ),
         );
       },
     );
@@ -426,6 +429,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         child: AnimatedOpacity(
           opacity: _showFocusIndicator ? 1.0 : 0.0,
           duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic, // iOS-native curve for 120Hz
           child: Container(
             width: 60,
             height: 60,

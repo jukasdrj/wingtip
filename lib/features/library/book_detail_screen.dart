@@ -39,7 +39,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOut,
+      curve: Curves.easeOutCubic, // iOS-native curve for 120Hz
     ));
 
     _controller.forward();

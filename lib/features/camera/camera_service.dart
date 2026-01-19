@@ -45,6 +45,8 @@ class CameraService {
         ResolutionPreset.high,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.jpeg,
+        // Enable maximum frame rate for ProMotion displays
+        fps: null, // null = use device maximum (120fps on ProMotion)
       );
 
       await _controller!.initialize();

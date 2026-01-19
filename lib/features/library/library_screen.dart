@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
+import '../../core/performance_overlay_provider.dart';
 import '../../data/database.dart';
 import '../../data/database_provider.dart';
 import '../../data/failed_scans_repository.dart';
@@ -313,7 +314,25 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     return Scaffold(
       backgroundColor: AppTheme.oledBlack,
       appBar: AppBar(
-        title: Text(appBarTitle),
+        title: GestureDetector(
+          // Long press on title to toggle performance overlay
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            ref.read(performanceOverlayProvider.notifier).toggle();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  ref.read(performanceOverlayProvider)
+                      ? 'Performance overlay enabled'
+                      : 'Performance overlay disabled',
+                ),
+                backgroundColor: AppTheme.borderGray,
+                duration: const Duration(seconds: 1),
+              ),
+            );
+          },
+          child: Text(appBarTitle),
+        ),
         backgroundColor: AppTheme.oledBlack,
         elevation: 0,
         leading: appBarLeading,
@@ -491,6 +510,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 
                 return GridView.builder(
             padding: const EdgeInsets.all(16),
+            // Enable iOS ProMotion scroll physics
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               childAspectRatio: 1 / 1.5,
@@ -507,10 +530,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 _seenBookIsbns.add(book.isbn);
               }
 
-              return AnimatedBookCard(
-                key: ValueKey(book.isbn),
-                book: book,
-                isNew: isNew,
+              // Wrap each item in RepaintBoundary for 120fps scroll
+              return RepaintBoundary(
+                child: AnimatedBookCard(
+                  key: ValueKey(book.isbn),
+                  book: book,
+                  isNew: isNew,
+                ),
               );
             },
           );
@@ -624,20 +650,27 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                // Enable iOS ProMotion scroll physics
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
                 itemCount: scans.length,
                 separatorBuilder: (context, index) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final scan = scans[index];
-                  return failed_card.FailedScanCard(
-                    failedScan: scan,
-                    onRetry: () async {
-                      // Trigger retry via JobStateNotifier
-                      await ref.read(jobStateProvider.notifier).retryFailedScan(scan.jobId);
-                    },
-                    onDelete: () async {
-                      // Delete the failed scan
-                      await ref.read(failedScansRepositoryProvider).deleteFailedScan(scan.id);
-                    },
+                  // Wrap each item in RepaintBoundary for 120fps scroll
+                  return RepaintBoundary(
+                    child: failed_card.FailedScanCard(
+                      failedScan: scan,
+                      onRetry: () async {
+                        // Trigger retry via JobStateNotifier
+                        await ref.read(jobStateProvider.notifier).retryFailedScan(scan.jobId);
+                      },
+                      onDelete: () async {
+                        // Delete the failed scan
+                        await ref.read(failedScansRepositoryProvider).deleteFailedScan(scan.id);
+                      },
+                    ),
                   );
                 },
               ),
@@ -696,7 +729,7 @@ class _AnimatedBookCardState extends State<AnimatedBookCard>
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOut,
+      curve: Curves.easeOutCubic, // iOS-native cubic bezier for 120Hz
     ));
 
     _scaleAnimation = Tween<double>(
@@ -704,7 +737,7 @@ class _AnimatedBookCardState extends State<AnimatedBookCard>
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOut,
+      curve: Curves.easeOutCubic, // iOS-native cubic bezier for 120Hz
     ));
 
     // Only animate if this is a new book
@@ -763,7 +796,7 @@ class _BookCardState extends ConsumerState<BookCard>
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _coverAnimationController,
-      curve: Curves.easeOut,
+      curve: Curves.easeOutCubic, // iOS-native cubic bezier for 120Hz
     ));
 
     _coverScaleAnimation = Tween<double>(
@@ -771,7 +804,7 @@ class _BookCardState extends ConsumerState<BookCard>
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _coverAnimationController,
-      curve: Curves.easeOut,
+      curve: Curves.easeOutCubic, // iOS-native cubic bezier for 120Hz
     ));
 
     // Start animation immediately if no cover URL

@@ -33,7 +33,8 @@ class _StreamOverlayState extends State<StreamOverlay>
     );
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeInOut,
+      curve: Curves.easeOutCubic, // iOS-native curve for 120Hz
+      reverseCurve: Curves.easeInCubic,
     );
 
     if (widget.message != null) {
