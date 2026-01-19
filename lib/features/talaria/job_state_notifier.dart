@@ -191,11 +191,13 @@ class JobStateNotifier extends Notifier<JobState> {
     switch (event.type) {
       case SseEventType.progress:
         final progress = event.data['progress'] as num? ?? 0.0;
+        final message = event.data['message'] as String?;
         _updateJob(
           jobId,
           job.copyWith(
             status: JobStatus.processing,
             progress: progress.toDouble(),
+            progressMessage: message,
           ),
         );
 

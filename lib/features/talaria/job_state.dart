@@ -7,6 +7,7 @@ class ScanJob {
   final JobStatus status;
   final String? errorMessage;
   final double? progress;
+  final String? progressMessage; // Stage message: 'Looking...', 'Reading...', etc.
   final Map<String, dynamic>? result;
   final DateTime createdAt;
 
@@ -18,6 +19,7 @@ class ScanJob {
     required this.status,
     this.errorMessage,
     this.progress,
+    this.progressMessage,
     this.result,
     required this.createdAt,
   });
@@ -37,6 +39,7 @@ class ScanJob {
     JobStatus? status,
     String? errorMessage,
     double? progress,
+    String? progressMessage,
     Map<String, dynamic>? result,
   }) {
     return ScanJob(
@@ -47,6 +50,7 @@ class ScanJob {
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       progress: progress ?? this.progress,
+      progressMessage: progressMessage ?? this.progressMessage,
       result: result ?? this.result,
       createdAt: createdAt,
     );

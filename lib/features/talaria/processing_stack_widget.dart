@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/features/talaria/job_state_provider.dart';
 
@@ -124,7 +125,13 @@ class JobCardWidget extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(1),
-        child: _buildThumbnail(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildThumbnail(),
+            _buildProgressOverlay(),
+          ],
+        ),
       ),
     );
   }
@@ -156,6 +163,33 @@ class JobCardWidget extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildProgressOverlay() {
+    final message = job.progressMessage;
+    final showMessage = message != null && message.isNotEmpty;
+
+    return AnimatedOpacity(
+      opacity: showMessage ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 200),
+      child: showMessage
+          ? Container(
+              color: Colors.black.withValues(alpha: 0.6),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.all(2),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 7,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                  height: 1.2,
+                ),
+              ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 
