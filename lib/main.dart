@@ -47,7 +47,12 @@ void main() async {
   if (cameraPermissionStatus.isGranted) {
     // Initialize camera in background during startup
     final cameraService = CameraService();
-    final cameraInitFuture = cameraService.initialize();
+
+    // Load camera settings to restore Night Mode preference
+    final prefs = await SharedPreferences.getInstance();
+    final nightModeEnabled = prefs.getBool('camera_night_mode_enabled') ?? false;
+
+    final cameraInitFuture = cameraService.initialize(restoreNightMode: nightModeEnabled);
 
     // Performance logging: Camera initialization started
     debugPrint('[Performance] Camera initialization started');

@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wingtip/core/performance_metrics_provider.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
@@ -260,6 +261,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             const ProcessingStackWidget(),
             _buildShutterButton(),
             _buildZoomIndicator(),
+            _buildNightModeButton(),
             if (_showFocusIndicator && _focusPoint != null)
               _buildFocusIndicator(),
           ],
@@ -415,6 +417,61 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             color: Colors.white,
             fontSize: 14,
             fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNightModeButton() {
+    final cameraService = ref.watch(cameraServiceProvider);
+
+    if (!cameraService.nightModeAvailable) {
+      return const SizedBox.shrink();
+    }
+
+    final isEnabled = cameraService.nightModeEnabled;
+
+    return Positioned(
+      top: 108, // Position below zoom indicator
+      left: 16,
+      child: GestureDetector(
+        onTap: () async {
+          HapticFeedback.lightImpact();
+          await cameraService.toggleNightMode();
+
+          // Save Night Mode preference
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('camera_night_mode_enabled', cameraService.nightModeEnabled);
+            debugPrint('[CameraScreen] Night Mode preference saved: ${cameraService.nightModeEnabled}');
+          } catch (e) {
+            debugPrint('[CameraScreen] Failed to save Night Mode preference: $e');
+          }
+
+          setState(() {}); // Trigger rebuild to update icon
+        },
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: isEnabled
+                ? const Color(0xFFFFD700).withValues(alpha: 0.2) // Gold/yellow tint when enabled
+                : Colors.black.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isEnabled
+                  ? const Color(0xFFFFD700) // Gold/yellow border
+                  : Colors.white.withValues(alpha: 0.3),
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            Icons.nightlight_round,
+            color: isEnabled
+                ? const Color(0xFFFFD700) // Gold/yellow icon
+                : Colors.white.withValues(alpha: 0.7),
+            size: 24,
           ),
         ),
       ),
