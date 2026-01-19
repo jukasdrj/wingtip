@@ -151,6 +151,80 @@ void main() {
       expect(scans.first.id, 1);
       expect(scans.last.id, 2);
     });
+
+    test('should save failed scan with default retention period', () async {
+      final beforeSave = DateTime.now().millisecondsSinceEpoch;
+
+      await database.saveFailedScan(
+        jobId: 'server-job-123',
+        imagePath: '/tmp/test_image.jpg',
+        errorMessage: 'OCR processing failed',
+      );
+
+      final afterSave = DateTime.now().millisecondsSinceEpoch;
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      expect(scan.jobId, 'server-job-123');
+      expect(scan.imagePath, '/tmp/test_image.jpg');
+      expect(scan.errorMessage, 'OCR processing failed');
+
+      // Check createdAt is within reasonable range
+      expect(scan.createdAt, greaterThanOrEqualTo(beforeSave));
+      expect(scan.createdAt, lessThanOrEqualTo(afterSave));
+
+      // Check expiresAt is 7 days after createdAt (default retention period)
+      final expectedExpiresAt = scan.createdAt + const Duration(days: 7).inMilliseconds;
+      expect(scan.expiresAt, expectedExpiresAt);
+    });
+
+    test('should save failed scan with custom retention period', () async {
+      await database.saveFailedScan(
+        jobId: 'server-job-456',
+        imagePath: '/tmp/another_image.jpg',
+        errorMessage: 'Network timeout',
+        retentionPeriod: const Duration(days: 14),
+      );
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      expect(scan.jobId, 'server-job-456');
+
+      // Check expiresAt is 14 days after createdAt
+      final expectedExpiresAt = scan.createdAt + const Duration(days: 14).inMilliseconds;
+      expect(scan.expiresAt, expectedExpiresAt);
+    });
+
+    test('should save multiple failed scans', () async {
+      await database.saveFailedScan(
+        jobId: 'job-1',
+        imagePath: '/tmp/image1.jpg',
+        errorMessage: 'Error 1',
+      );
+
+      await database.saveFailedScan(
+        jobId: 'job-2',
+        imagePath: '/tmp/image2.jpg',
+        errorMessage: 'Error 2',
+      );
+
+      await database.saveFailedScan(
+        jobId: 'job-3',
+        imagePath: '/tmp/image3.jpg',
+        errorMessage: 'Error 3',
+      );
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 3);
+
+      expect(scans[0].jobId, 'job-1');
+      expect(scans[1].jobId, 'job-2');
+      expect(scans[2].jobId, 'job-3');
+    });
   });
 
   group('FTS5 Search', () {

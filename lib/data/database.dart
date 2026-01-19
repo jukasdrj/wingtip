@@ -261,6 +261,27 @@ class AppDatabase extends _$AppDatabase {
 
     return (delete(books)..where((t) => t.isbn.isIn(isbns))).go();
   }
+
+  // Save a failed scan to the database
+  Future<void> saveFailedScan({
+    required String jobId,
+    required String imagePath,
+    required String errorMessage,
+    Duration retentionPeriod = const Duration(days: 7),
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final expiresAt = now + retentionPeriod.inMilliseconds;
+
+    final failedScan = FailedScansCompanion(
+      jobId: Value(jobId),
+      imagePath: Value(imagePath),
+      errorMessage: Value(errorMessage),
+      createdAt: Value(now),
+      expiresAt: Value(expiresAt),
+    );
+
+    await into(failedScans).insert(failedScan);
+  }
 }
 
 LazyDatabase _openConnection() {

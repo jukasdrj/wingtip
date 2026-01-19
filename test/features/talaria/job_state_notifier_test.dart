@@ -335,6 +335,124 @@ void main() {
     });
   });
 
+  group('JobStateNotifier - Failed Scan Persistence', () {
+    test('should save failed scan to database with correct fields', () async {
+      // Save a failed scan using the database method
+      await database.saveFailedScan(
+        jobId: 'server-job-xyz',
+        imagePath: '/tmp/scan_image.jpg',
+        errorMessage: 'SSE error: OCR processing failed',
+      );
+
+      // Verify it was saved
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      expect(scan.jobId, 'server-job-xyz');
+      expect(scan.imagePath, '/tmp/scan_image.jpg');
+      expect(scan.errorMessage, 'SSE error: OCR processing failed');
+    });
+
+    test('should save failed scan with correct timestamps', () async {
+      final before = DateTime.now().millisecondsSinceEpoch;
+
+      await database.saveFailedScan(
+        jobId: 'server-job-abc',
+        imagePath: '/tmp/test.jpg',
+        errorMessage: 'Network timeout',
+      );
+
+      final after = DateTime.now().millisecondsSinceEpoch;
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+
+      // Verify createdAt is current timestamp
+      expect(scan.createdAt, greaterThanOrEqualTo(before));
+      expect(scan.createdAt, lessThanOrEqualTo(after));
+
+      // Verify expiresAt is 7 days from createdAt
+      final expectedExpiresAt = scan.createdAt + const Duration(days: 7).inMilliseconds;
+      expect(scan.expiresAt, expectedExpiresAt);
+    });
+
+    test('should save multiple failed scans independently', () async {
+      await database.saveFailedScan(
+        jobId: 'job-1',
+        imagePath: '/tmp/img1.jpg',
+        errorMessage: 'Error 1',
+      );
+
+      await database.saveFailedScan(
+        jobId: 'job-2',
+        imagePath: '/tmp/img2.jpg',
+        errorMessage: 'Error 2',
+      );
+
+      await database.saveFailedScan(
+        jobId: 'job-3',
+        imagePath: '/tmp/img3.jpg',
+        errorMessage: 'Error 3',
+      );
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 3);
+
+      expect(scans[0].jobId, 'job-1');
+      expect(scans[0].errorMessage, 'Error 1');
+
+      expect(scans[1].jobId, 'job-2');
+      expect(scans[1].errorMessage, 'Error 2');
+
+      expect(scans[2].jobId, 'job-3');
+      expect(scans[2].errorMessage, 'Error 3');
+    });
+
+    test('should save failed scan with custom retention period', () async {
+      await database.saveFailedScan(
+        jobId: 'server-job-custom',
+        imagePath: '/tmp/custom.jpg',
+        errorMessage: 'Custom retention error',
+        retentionPeriod: const Duration(days: 3),
+      );
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      final expectedExpiresAt = scan.createdAt + const Duration(days: 3).inMilliseconds;
+      expect(scan.expiresAt, expectedExpiresAt);
+    });
+
+    test('should handle various error message formats', () async {
+      final errorMessages = [
+        'Unknown error',
+        'SSE stream timeout',
+        'OCR processing failed: insufficient quality',
+        'Network error: connection refused',
+        'Server error: 500 Internal Server Error',
+      ];
+
+      for (var i = 0; i < errorMessages.length; i++) {
+        await database.saveFailedScan(
+          jobId: 'job-$i',
+          imagePath: '/tmp/image-$i.jpg',
+          errorMessage: errorMessages[i],
+        );
+      }
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, errorMessages.length);
+
+      for (var i = 0; i < errorMessages.length; i++) {
+        expect(scans[i].errorMessage, errorMessages[i]);
+      }
+    });
+  });
+
   group('JobState - Rate Limit', () {
     test('should create idle state without rate limit', () {
       final state = JobState.idle();

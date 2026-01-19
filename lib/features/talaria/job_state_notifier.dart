@@ -296,6 +296,28 @@ class JobStateNotifier extends Notifier<JobState> {
         );
         _sseSubscriptions[jobId]?.cancel();
         _sseSubscriptions.remove(jobId);
+
+        // Save failed scan to database
+        await _saveFailedScan(serverJobId, job.imagePath, errorMessage);
+    }
+  }
+
+  /// Save failed scan to database
+  Future<void> _saveFailedScan(
+    String jobId,
+    String imagePath,
+    String errorMessage,
+  ) async {
+    try {
+      final database = ref.read(databaseProvider);
+      await database.saveFailedScan(
+        jobId: jobId,
+        imagePath: imagePath,
+        errorMessage: errorMessage,
+      );
+      debugPrint('[JobStateNotifier] Failed scan saved: $jobId');
+    } catch (e) {
+      debugPrint('[JobStateNotifier] Failed to save failed scan: $e');
     }
   }
 

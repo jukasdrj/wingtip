@@ -1,0 +1,459 @@
+{
+  "name": "Epic 4: Failed Scan Queue & Production Resilience",
+  "description": "Implement comprehensive error handling and retry system to transform Wingtip from demo-ready to production-ready. The FailedScans table infrastructure exists but is completely unused - this epic brings it to life.",
+  "branchName": "ralph/epic-4-resilience",
+  "userStories": [
+    {
+      "id": "US-131",
+      "title": "Save Failed Scans to Database",
+      "description": "As a system, I want to save failed scans to the database so that users can retry them later without losing data.",
+      "acceptanceCriteria": [
+        "When SSE error event arrives, save to FailedScans table with jobId, imagePath, errorMessage",
+        "Calculate expiresAt timestamp based on retention policy (default 7 days from createdAt)",
+        "Store createdAt as current Unix timestamp in milliseconds",
+        "Modify JobStateNotifier to call FailedScansRepository on error events",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with failed scan persistence tests"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-132",
+      "title": "Failed Scans Repository Layer",
+      "description": "As a developer, I want a repository abstraction for failed scans so that I can manage retry logic cleanly.",
+      "acceptanceCriteria": [
+        "Create lib/data/failed_scans_repository.dart with FailedScansRepository class",
+        "Implement saveFailedScan(jobId, imagePath, errorMessage) method",
+        "Implement getAllFailedScans() returning Stream<List<FailedScan>>",
+        "Implement deleteFailedScan(id) and retryFailedScan(id) methods",
+        "Create Riverpod providers: failedScansRepositoryProvider and watchFailedScansProvider",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with repository unit tests"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-131"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-133",
+      "title": "Preserve Images for Failed Scans",
+      "description": "As a user, I want my failed scan images preserved so that I can retry them without re-capturing.",
+      "acceptanceCriteria": [
+        "When scan fails, move image from temp directory to persistent app_documents/failed_scans/",
+        "Filename format: {jobId}.jpg for easy lookup",
+        "Update JobStateNotifier cleanup logic to skip deletion for failed scans",
+        "On successful retry: delete image from failed_scans directory",
+        "On manual delete: remove both database entry and image file",
+        "flutter analyze shows no errors",
+        "Manual verification: Failed scan images persist across app restarts"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-132"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-134",
+      "title": "Handle Network Upload Failures",
+      "description": "As a user, I want network upload failures saved to retry queue so that temporary connection issues don't lose my scans.",
+      "acceptanceCriteria": [
+        "Catch DioException, SocketException, TimeoutException in upload flow",
+        "Map exception types to user-friendly error messages",
+        "Save to FailedScans with appropriate error: 'No internet connection', 'Upload timed out after 30s', 'Server unreachable'",
+        "Keep original image in failed_scans directory",
+        "Show error toast notification to user",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with network failure handling tests"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-133"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-135",
+      "title": "Handle Backend No Books Found Response",
+      "description": "As a user, I want to retry images where no books were detected so that I can adjust my scan technique.",
+      "acceptanceCriteria": [
+        "Detect 404 status or empty result array from backend response",
+        "Save to FailedScans with message: 'No books detected in this image'",
+        "Preserve original image in failed_scans directory",
+        "Allow user to retry same image from failed queue",
+        "Show informative toast: 'No books found. Try closer zoom or clearer angle.'",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with no-books-found handling tests"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-134"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-136",
+      "title": "Failed Scans Tab in Library",
+      "description": "As a user, I want to see all my failed scans in one place so that I can review and retry them.",
+      "acceptanceCriteria": [
+        "Add TabBar to LibraryScreen with tabs: 'All Books' and 'Failed Scans'",
+        "Show count badge on Failed tab when failed scans exist (e.g., 'Failed (5)')",
+        "Failed tab displays grid view of failed scan thumbnails (same 3-column layout as books)",
+        "Empty state: 'No failed scans' with checkmark icon when queue is empty",
+        "flutter analyze shows no errors",
+        "Manual verification: Tab switches between book library and failed scans"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-135"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-137",
+      "title": "Failed Scan Card UI",
+      "description": "As a user, I want to see why each scan failed so that I understand what went wrong.",
+      "acceptanceCriteria": [
+        "Create FailedScanCard widget displaying image thumbnail from failed_scans directory",
+        "Apply red 1px border (#FF3B30) to indicate error state",
+        "Show error message below thumbnail (truncated to 2 lines with ellipsis)",
+        "Display relative timestamp: '2 hours ago', '1 day ago'",
+        "Add action buttons: Orange 'Retry' button and Gray 'Delete' button",
+        "flutter analyze shows no errors",
+        "Manual verification: Failed scan cards display correctly with proper styling"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-136"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-140",
+      "title": "Manual Retry Single Scan",
+      "description": "As a user, I want to tap Retry on a failed scan so that I can recover from temporary errors.",
+      "acceptanceCriteria": [
+        "Tap 'Retry' button reads image from failed_scans/{jobId}.jpg",
+        "Call existing uploadScan() method with preserved image",
+        "Show job in processing queue UI (same as new scans)",
+        "On successful upload and completion: delete from FailedScans table and remove image file",
+        "On retry failure: update errorMessage with new attempt information",
+        "flutter analyze shows no errors",
+        "Manual verification: Retry flow matches new scan behavior"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-137"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-142",
+      "title": "Auto-Cleanup Expired Failed Scans",
+      "description": "As a user, I want old failed scans deleted automatically so that my storage doesn't fill up.",
+      "acceptanceCriteria": [
+        "Run cleanup job on app startup checking FailedScans.expiresAt < now()",
+        "Delete expired database entries and associated image files",
+        "Schedule daily cleanup check using background task or app lifecycle hook",
+        "Log cleanup results to debug console: 'Cleaned up 3 expired failed scans'",
+        "Respect retention policy configured in settings (default 7 days)",
+        "flutter analyze shows no errors",
+        "flutter test runs successfully with auto-cleanup logic tests"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-140"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-143",
+      "title": "Failed Scan Retention Settings",
+      "description": "As a user, I want to configure how long failed scans are kept so that I control my storage usage.",
+      "acceptanceCriteria": [
+        "Add 'Failed Scan Retention' section to Debug Settings page",
+        "Options: DropdownButton with values 3 days, 7 days (default), 14 days, 30 days, Never",
+        "Display current failed scan count and storage usage: 'Failed Scans: 12 (using 8.4 MB)'",
+        "Add 'Clear All Failed Scans Now' button with confirmation dialog",
+        "Save retention preference to SharedPreferences",
+        "flutter analyze shows no errors",
+        "Manual verification: Retention setting persists and affects expiresAt calculation"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-142"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-144",
+      "title": "Device ID Management",
+      "description": "As a user, I want to see and regenerate my device ID so that I can reset my privacy if needed.",
+      "acceptanceCriteria": [
+        "Display current X-Device-ID UUID in Debug Settings using JetBrains Mono font",
+        "Add 'Copy to Clipboard' button next to device ID",
+        "Add 'Regenerate Device ID' button with warning dialog",
+        "Warning text: 'This will reset your device identity. Rate limits and analytics will restart. Continue?'",
+        "On confirm: generate new UUID, save to FlutterSecureStorage, restart app",
+        "flutter analyze shows no errors",
+        "Manual verification: Device ID regeneration works and persists"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-143"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-146",
+      "title": "Specific Error Messages for Common Failures",
+      "description": "As a user, I want to see helpful error messages so that I understand how to fix the problem.",
+      "acceptanceCriteria": [
+        "Create error message mapping for common HTTP status codes and exceptions",
+        "400 Bad Request -> 'Image quality too low. Try again with better lighting.'",
+        "404 Not Found -> 'No books detected. Try closer zoom or clearer angle.'",
+        "429 Rate Limited -> 'Daily scan limit reached. Retry after [countdown].'",
+        "500 Server Error -> 'Server issue. Your image is saved and will retry automatically.'",
+        "Timeout -> 'Upload timed out. Check your connection and retry.'",
+        "flutter analyze shows no errors",
+        "Manual verification: Error messages are user-friendly and actionable"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-144"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-138",
+      "title": "Batch Operations for Failed Scans",
+      "description": "As a user, I want to retry or delete multiple failed scans at once so that I can clean up efficiently.",
+      "acceptanceCriteria": [
+        "Add 'Retry All' button at top of Failed Scans tab (orange, AppTheme.accentColor)",
+        "Add 'Clear All Failed' button with confirmation dialog: 'Delete all X failed scans?'",
+        "Long-press on failed scan card enters select mode with checkboxes",
+        "Select mode shows trash icon in app bar for batch delete",
+        "Batch delete shows confirmation: 'Delete 5 failed scans?'",
+        "flutter analyze shows no errors",
+        "Manual verification: Batch operations work smoothly"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-146"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-141",
+      "title": "Batch Retry Failed Scans",
+      "description": "As a user, I want to retry all failed scans at once so that I can recover from network outages efficiently.",
+      "acceptanceCriteria": [
+        "Tap 'Retry All' button processes all failed scans sequentially",
+        "Throttle uploads to 1 scan per second to avoid rate limiting",
+        "Show progress toast: 'Retrying 3 of 12...' that updates as retries complete",
+        "After completion, show summary toast: '8 succeeded, 4 failed'",
+        "Only remove successful retries from failed queue - keep failures for manual review",
+        "flutter analyze shows no errors",
+        "Manual verification: Batch retry handles mix of successes and failures correctly"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-138"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-139",
+      "title": "Failed Scan Detail View",
+      "description": "As a user, I want to see full details about a failed scan so that I can understand what went wrong.",
+      "acceptanceCriteria": [
+        "Tap on failed scan card opens full-screen detail view",
+        "Display full-size original image from failed_scans directory",
+        "Show complete error message (not truncated)",
+        "Show full timestamp: 'Failed on Jan 18, 2026 at 3:45 PM'",
+        "Large 'Retry Scan' button (orange) at bottom",
+        "Large 'Delete' button (gray) next to retry",
+        "Add expandable 'Why did this fail?' section with contextual help based on error type",
+        "flutter analyze shows no errors",
+        "Manual verification: Detail view provides helpful debugging information"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-141"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-145",
+      "title": "Network Retry on Connection Restored",
+      "description": "As a user, I want to be prompted to retry failed scans when my connection returns so that I don't forget about them.",
+      "acceptanceCriteria": [
+        "Listen to NetworkStatusProvider for offline -> online transitions",
+        "When connection restored and failed scans exist, show toast: 'Connection restored. 5 failed scans waiting. Retry all?'",
+        "Toast shows two buttons: 'Retry All' and 'Dismiss'",
+        "Add setting toggle: 'Auto-retry on reconnect' (default: off)",
+        "If auto-retry enabled, automatically trigger retry all when online",
+        "flutter analyze shows no errors",
+        "Manual verification: Reconnection prompt appears correctly"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-139"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-148",
+      "title": "Graceful SSE Stream Interruption Handling",
+      "description": "As a user, I want partial results saved when my connection drops mid-scan so that I don't lose everything.",
+      "acceptanceCriteria": [
+        "Detect SSE connection drops mid-stream (connection closed before 'complete' event)",
+        "Save any books already received via 'result' events to database (partial success)",
+        "Mark job as failed in FailedScans with error: 'Connection lost during processing'",
+        "UI shows partial results in library AND failed scan entry for retry",
+        "Retry uploads full image again for complete processing",
+        "flutter analyze shows no errors",
+        "Manual verification: Partial results + retry option work correctly"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-145"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-150",
+      "title": "Background Isolate Image Processing Verification",
+      "description": "As a developer, I want to verify image processing never blocks the UI so that the shutter remains responsive.",
+      "acceptanceCriteria": [
+        "Audit existing image compression code to confirm compute() isolate usage",
+        "Add performance timing logs around image processing: 'Image processed in 342ms'",
+        "Target: < 500ms average processing time",
+        "Verify shutter button remains clickable during processing (no frame drops)",
+        "Add metrics to debug settings showing average processing time",
+        "flutter analyze shows no errors",
+        "Manual verification: Rapid shutter taps never block or jank"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-148"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-151",
+      "title": "Session Counter Gamification",
+      "description": "As a user, I want to see how many books I've scanned in a session so that I feel accomplished.",
+      "acceptanceCriteria": [
+        "Add session counter in top-right corner of camera screen",
+        "Display format: '5 books scanned...', '10 books scanned...', '25 books scanned!'",
+        "Trigger celebratory pulse animation at milestones: 10, 25, 50, 100 books",
+        "Increment counter on each successful scan completion",
+        "Reset counter when app goes to background or after 5 minutes idle",
+        "Use Swiss Utility styling: white text on black, 1px border",
+        "flutter analyze shows no errors",
+        "Manual verification: Counter updates correctly and resets appropriately"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-150"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-149",
+      "title": "Failed Scan Analytics & Insights",
+      "description": "As a user, I want to understand why my scans fail so that I can improve my technique.",
+      "acceptanceCriteria": [
+        "Track failure reason metadata in FailedScans: network_error, quality_too_low, no_books_found, server_error, rate_limited",
+        "Add analytics section to Debug Settings page",
+        "Display failure breakdown: 'Failure analysis: 60% network, 25% no books, 10% quality, 5% server'",
+        "Show pie chart or bar graph visualization (optional, can be text-based)",
+        "Include total failed scans count and success rate percentage",
+        "flutter analyze shows no errors",
+        "Manual verification: Analytics help users understand failure patterns"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-151"
+      ],
+      "completionNotes": ""
+    },
+    {
+      "id": "US-152",
+      "title": "Performance Monitoring Dashboard",
+      "description": "As a developer, I want to track performance metrics so that I can verify PRD targets are met.",
+      "acceptanceCriteria": [
+        "Add 'Performance Metrics' section to Debug Settings page",
+        "Display metrics: Cold start time (target < 1000ms), Shutter latency (target < 50ms), Avg upload time, Avg SSE first-result time",
+        "Show frame drops during scanning sessions",
+        "Format as table with 'Target' vs 'Actual' columns",
+        "Color code: Green when meeting target, Red when missing target",
+        "Persist metrics using SharedPreferences for historical tracking",
+        "flutter analyze shows no errors",
+        "Manual verification: Metrics accurately reflect app performance"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-149"
+      ],
+      "completionNotes": ""
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-01-18T00:00:00.000Z",
+    "updatedAt": "2026-01-19T04:22:31.959Z",
+    "epicNumber": 4,
+    "totalStories": 20,
+    "completedStories": 0,
+    "estimatedComplexity": "high",
+    "blockers": [],
+    "notes": "Epic 4 implements the complete failed scan handling system. The FailedScans table already exists in the database schema (created in US-116) but is completely unused. This epic brings the dormant infrastructure to life and transforms Wingtip from demo-ready to production-ready by implementing comprehensive error handling, retry logic, and user-friendly failure recovery."
+  }
+}
