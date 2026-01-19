@@ -37,6 +37,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   final Set<String> _shownErrorJobIds = {};
   final Set<String> _completedJobIds = {};
 
+  // Focus and exposure lock state
+  bool _focusLocked = false;
+  Offset? _lockedFocusPoint;
+  double _exposureCompensation = 0.0;
+  double _baseExposureCompensation = 0.0;
+  bool _isAdjustingExposure = false;
+  double _swipeStartY = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -150,6 +158,30 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final cameraService = ref.read(cameraServiceProvider);
     if (cameraService.controller == null) return;
 
+    // If focus is locked and user taps elsewhere, unlock
+    if (_focusLocked) {
+      setState(() {
+        _focusLocked = false;
+        _lockedFocusPoint = null;
+        _exposureCompensation = 0.0;
+        _baseExposureCompensation = 0.0;
+      });
+
+      // Reset to auto modes and default exposure
+      try {
+        await cameraService.controller!.setFocusMode(FocusMode.auto);
+        await cameraService.controller!.setExposureMode(ExposureMode.auto);
+        final nightModeOffset = cameraService.nightModeEnabled ? 1.0 : 0.7;
+        await cameraService.controller!.setExposureOffset(nightModeOffset);
+      } catch (e) {
+        debugPrint('[CameraScreen] Error resetting camera modes: $e');
+      }
+
+      // Trigger haptic feedback for unlock
+      HapticFeedback.lightImpact();
+      return;
+    }
+
     // Get tap position relative to the preview
     final offset = Offset(
       details.localPosition.dx / constraints.maxWidth,
@@ -183,7 +215,115 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     }
   }
 
+  void _handleLongPress(LongPressStartDetails details, BoxConstraints constraints) async {
+    final cameraService = ref.read(cameraServiceProvider);
+    if (cameraService.controller == null) return;
+
+    // Get long-press position relative to the preview
+    final offset = Offset(
+      details.localPosition.dx / constraints.maxWidth,
+      details.localPosition.dy / constraints.maxHeight,
+    );
+
+    try {
+      // Set and lock focus point
+      await cameraService.controller!.setFocusPoint(offset);
+      await cameraService.controller!.setExposurePoint(offset);
+      await cameraService.controller!.setFocusMode(FocusMode.locked);
+      await cameraService.controller!.setExposureMode(ExposureMode.locked);
+
+      // Lock focus
+      setState(() {
+        _focusLocked = true;
+        _lockedFocusPoint = details.localPosition;
+        _showFocusIndicator = false; // Hide temporary indicator
+
+        // Initialize exposure compensation based on current camera setting
+        final nightModeOffset = cameraService.nightModeEnabled ? 1.0 : 0.7;
+        _exposureCompensation = nightModeOffset;
+        _baseExposureCompensation = nightModeOffset;
+      });
+
+      // Trigger medium haptic feedback for lock
+      HapticFeedback.mediumImpact();
+
+      debugPrint('[CameraScreen] Focus and exposure locked at ${details.localPosition}');
+    } catch (e) {
+      debugPrint('[CameraScreen] Error locking focus: $e');
+    }
+  }
+
+  void _handleVerticalDragStart(DragStartDetails details) {
+    if (!_focusLocked) return;
+
+    setState(() {
+      _isAdjustingExposure = true;
+      _swipeStartY = details.globalPosition.dy;
+      _baseExposureCompensation = _exposureCompensation;
+    });
+  }
+
+  void _handleVerticalDragUpdate(DragUpdateDetails details) async {
+    if (!_focusLocked || !_isAdjustingExposure) return;
+
+    final cameraService = ref.read(cameraServiceProvider);
+    if (cameraService.controller == null) return;
+
+    // Calculate exposure change based on vertical swipe
+    // Swipe up (negative delta) = increase exposure
+    // Swipe down (positive delta) = decrease exposure
+    final deltaY = details.globalPosition.dy - _swipeStartY;
+    final exposureChange = -deltaY / 200.0; // Scale factor for sensitivity
+
+    // Calculate new exposure compensation (-2.0 to +2.0)
+    final newExposure = (_baseExposureCompensation + exposureChange).clamp(-2.0, 2.0);
+
+    if ((newExposure - _exposureCompensation).abs() > 0.05) {
+      setState(() {
+        _exposureCompensation = newExposure;
+      });
+
+      try {
+        await cameraService.controller!.setExposureOffset(_exposureCompensation);
+        // Light haptic feedback during adjustment
+        HapticFeedback.selectionClick();
+      } catch (e) {
+        debugPrint('[CameraScreen] Error adjusting exposure: $e');
+      }
+    }
+  }
+
+  void _handleVerticalDragEnd(DragEndDetails details) {
+    if (!_focusLocked) return;
+
+    setState(() {
+      _isAdjustingExposure = false;
+    });
+  }
+
   Future<void> _onShutterTap() async {
+    final cameraService = ref.read(cameraServiceProvider);
+
+    // Unlock focus/exposure if locked
+    if (_focusLocked) {
+      setState(() {
+        _focusLocked = false;
+        _lockedFocusPoint = null;
+        _exposureCompensation = 0.0;
+        _baseExposureCompensation = 0.0;
+      });
+
+      // Reset to auto modes
+      try {
+        await cameraService.controller?.setFocusMode(FocusMode.auto);
+        await cameraService.controller?.setExposureMode(ExposureMode.auto);
+        final nightModeOffset = cameraService.nightModeEnabled ? 1.0 : 0.7;
+        await cameraService.controller?.setExposureOffset(nightModeOffset);
+      } catch (e) {
+        debugPrint('[CameraScreen] Error resetting camera modes: $e');
+      }
+    }
+
     // Start shutter latency timer
     final shutterStartTime = DateTime.now();
 
@@ -264,6 +404,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             _buildNightModeButton(),
             if (_showFocusIndicator && _focusPoint != null)
               _buildFocusIndicator(),
+            if (_focusLocked && _lockedFocusPoint != null)
+              _buildLockedFocusIndicator(),
+            if (_focusLocked && (_isAdjustingExposure || _exposureCompensation != 0.0))
+              _buildExposureOverlay(),
           ],
           StreamOverlay(
             message: streamMessage,
@@ -308,6 +452,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           onScaleStart: _handleScaleStart,
           onScaleUpdate: _handleScaleUpdate,
           onTapUp: (details) => _handleTapUp(details, constraints),
+          onLongPressStart: (details) => _handleLongPress(details, constraints),
+          onVerticalDragStart: _handleVerticalDragStart,
+          onVerticalDragUpdate: _handleVerticalDragUpdate,
+          onVerticalDragEnd: _handleVerticalDragEnd,
           child: RepaintBoundary(
             // Isolate camera preview to avoid unnecessary repaints
             child: CameraPreview(cameraService.controller!),
@@ -547,6 +695,117 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLockedFocusIndicator() {
+    const yellowColor = Color(0xFFFFD700); // iOS focus lock yellow
+
+    return Positioned(
+      left: _lockedFocusPoint!.dx - 30,
+      top: _lockedFocusPoint!.dy - 30,
+      child: IgnorePointer(
+        child: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: yellowColor,
+              width: 2,
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Top-left bracket
+              Positioned(
+                left: 0,
+                top: 0,
+                child: CustomPaint(
+                  size: const Size(12, 12),
+                  painter: _BracketPainter(
+                    color: yellowColor,
+                    position: BracketPosition.topLeft,
+                  ),
+                ),
+              ),
+              // Top-right bracket
+              Positioned(
+                right: 0,
+                top: 0,
+                child: CustomPaint(
+                  size: const Size(12, 12),
+                  painter: _BracketPainter(
+                    color: yellowColor,
+                    position: BracketPosition.topRight,
+                  ),
+                ),
+              ),
+              // Bottom-left bracket
+              Positioned(
+                left: 0,
+                bottom: 0,
+                child: CustomPaint(
+                  size: const Size(12, 12),
+                  painter: _BracketPainter(
+                    color: yellowColor,
+                    position: BracketPosition.bottomLeft,
+                  ),
+                ),
+              ),
+              // Bottom-right bracket
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: CustomPaint(
+                  size: const Size(12, 12),
+                  painter: _BracketPainter(
+                    color: yellowColor,
+                    position: BracketPosition.bottomRight,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExposureOverlay() {
+    // Calculate exposure compensation relative to base (Night Mode or default)
+    final cameraService = ref.watch(cameraServiceProvider);
+    final baseOffset = cameraService.nightModeEnabled ? 1.0 : 0.7;
+    final evChange = _exposureCompensation - baseOffset;
+
+    final evString = evChange >= 0
+        ? '+${evChange.toStringAsFixed(1)}'
+        : evChange.toStringAsFixed(1);
+
+    return Positioned(
+      left: _lockedFocusPoint!.dx - 50,
+      top: _lockedFocusPoint!.dy + 40, // Below the focus box
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: const Color(0xFFFFD700).withValues(alpha: 0.5),
+              width: 1,
+            ),
+          ),
+          child: Text(
+            '$evString EV',
+            style: const TextStyle(
+              color: Color(0xFFFFD700),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ),
