@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wingtip/core/error_messages.dart';
 import 'package:wingtip/core/failed_scans_directory.dart';
 import 'package:wingtip/core/sse_client.dart';
 import 'package:wingtip/core/sse_client_provider.dart';
@@ -273,30 +274,7 @@ class JobStateNotifier extends Notifier<JobState> {
     HapticFeedback.heavyImpact();
 
     // Map exception to user-friendly error message
-    String errorMessage;
-
-    if (error is DioException) {
-      switch (error.type) {
-        case DioExceptionType.connectionTimeout:
-        case DioExceptionType.sendTimeout:
-        case DioExceptionType.receiveTimeout:
-          errorMessage = 'Upload timed out after 30s';
-        case DioExceptionType.connectionError:
-          errorMessage = 'Server unreachable';
-        case DioExceptionType.badResponse:
-          errorMessage = 'Server error: ${error.response?.statusCode ?? "unknown"}';
-        case DioExceptionType.cancel:
-          errorMessage = 'Upload cancelled';
-        default:
-          errorMessage = 'No internet connection';
-      }
-    } else if (error is SocketException) {
-      errorMessage = 'No internet connection';
-    } else if (error is TimeoutException) {
-      errorMessage = 'Upload timed out after 30s';
-    } else {
-      errorMessage = error.toString();
-    }
+    final errorMessage = ErrorMessages.fromException(error);
 
     debugPrint('[JobStateNotifier] Retry error: $errorMessage');
 
@@ -354,31 +332,8 @@ class JobStateNotifier extends Notifier<JobState> {
     HapticFeedback.heavyImpact();
 
     // Map exception to user-friendly error message
-    String errorMessage;
+    final errorMessage = ErrorMessages.fromException(error);
     String? serverJobId;
-
-    if (error is DioException) {
-      switch (error.type) {
-        case DioExceptionType.connectionTimeout:
-        case DioExceptionType.sendTimeout:
-        case DioExceptionType.receiveTimeout:
-          errorMessage = 'Upload timed out after 30s';
-        case DioExceptionType.connectionError:
-          errorMessage = 'Server unreachable';
-        case DioExceptionType.badResponse:
-          errorMessage = 'Server error: ${error.response?.statusCode ?? "unknown"}';
-        case DioExceptionType.cancel:
-          errorMessage = 'Upload cancelled';
-        default:
-          errorMessage = 'No internet connection';
-      }
-    } else if (error is SocketException) {
-      errorMessage = 'No internet connection';
-    } else if (error is TimeoutException) {
-      errorMessage = 'Upload timed out after 30s';
-    } else {
-      errorMessage = error.toString();
-    }
 
     debugPrint('[JobStateNotifier] Network error: $errorMessage');
 
@@ -541,18 +496,19 @@ class JobStateNotifier extends Notifier<JobState> {
           // No books detected - treat as a failed scan
           debugPrint('[JobStateNotifier] No books detected in job $jobId');
           HapticFeedback.heavyImpact();
+          const errorMessage = 'No books detected. Try closer zoom or clearer angle.';
           _updateJob(
             jobId,
             job.copyWith(
               status: JobStatus.error,
-              errorMessage: 'No books detected in this image',
+              errorMessage: errorMessage,
             ),
           );
           await _sseSubscriptions[jobId]?.cancel();
           _sseSubscriptions.remove(jobId);
 
           // Save failed scan to database
-          await _saveFailedScan(serverJobId, job.imagePath, 'No books detected in this image');
+          await _saveFailedScan(serverJobId, job.imagePath, errorMessage);
           return;
         }
 

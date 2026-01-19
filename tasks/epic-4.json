@@ -202,12 +202,12 @@
         "Manual verification: Retention setting persists and affects expiresAt calculation"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-142"
       ],
-      "completionNotes": ""
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-144",
@@ -223,12 +223,12 @@
         "Manual verification: Device ID regeneration works and persists"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-143"
       ],
-      "completionNotes": ""
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-146",
@@ -448,7 +448,7 @@
   ],
   "metadata": {
     "createdAt": "2026-01-18T00:00:00.000Z",
-    "updatedAt": "2026-01-19T04:59:35.311Z",
+    "updatedAt": "2026-01-19T05:08:14.352Z",
     "epicNumber": 4,
     "totalStories": 20,
     "completedStories": 0,

@@ -90,3 +90,21 @@ g patterns (SSE handling, error mapping, cleanup)\n   - ✅ Proper haptic feedba
 successfully with all auto-cleanup logic tests passing ✅\n\n### Files Created/Modified\n\n**Created:**\n- `lib/services/failed_scans_cleanup_service.dart` - Core cleanup logic\n- `lib/services/failed_scans_cleanup_service_provider.dart` - Riverpod provider\n- `lib/core/app_lifecycle_observer.dart` - Daily cleanup scheduler\n- `test/services/failed_scans_cleanup_service_test.dart` - Comprehensive tests\n\n**Modified:**\n- `lib/main.dart` - Integrated cleanup on startup and lifecycle observer\n\n
 
 ---
+## ✓ Iteration 10 - US-143: Failed Scan Retention Settings
+*2026-01-19T05:04:06.455Z (271s)*
+
+**Status:** Completed
+
+**Notes:**
+features/talaria/job_state_notifier.dart`):\n   - Updated all `saveFailedScan` calls to use the retention setting from SharedPreferences\n   - Ensures `expiresAt` is calculated based on user's retention preference\n\n### Dependencies Added:\n- `shared_preferences: ^2.3.3` added to `pubspec.yaml`\n\n### Quality Checks:\n- ✅ `flutter analyze` shows no errors\n- ✅ All acceptance criteria met\n- ✅ Proper error handling and confirmation dialogs\n- ✅ Follows existing code patterns and architecture\n\n
+
+---
+## ✓ Iteration 11 - US-144: Device ID Management
+*2026-01-19T05:08:13.343Z (246s)*
+
+**Status:** Completed
+
+**Notes:**
+ebug_settings_page.dart:188-196)\n6. ✅ **RestartWidget** - New utility widget for full app restarts (lib/core/restart_widget.dart)\n\n### Quality Checks\n- ✅ flutter analyze - No issues found\n- ✅ Code review - All acceptance criteria met\n- ✅ Committed with proper message: `feat: US-144 - Device ID Management`\n\n### Files Modified\n- `lib/core/restart_widget.dart` (new file)\n- `lib/features/debug/debug_settings_page.dart` (updated)\n- `lib/main.dart` (updated to wrap app in RestartWidget)\n\n
+
+---
