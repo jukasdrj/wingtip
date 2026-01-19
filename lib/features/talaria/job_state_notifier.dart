@@ -8,6 +8,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/error_messages.dart';
 import 'package:wingtip/core/failed_scans_directory.dart';
+import 'package:wingtip/core/failure_categorizer.dart';
 import 'package:wingtip/core/sse_client.dart';
 import 'package:wingtip/core/sse_client_provider.dart';
 import 'package:wingtip/core/talaria_client_provider.dart';
@@ -77,6 +78,7 @@ class JobStateNotifier extends Notifier<JobState> {
           jobId: failedScanJobId,
           imagePath: imagePath,
           errorMessage: 'Image file missing - cannot retry',
+          failureReason: FailureReason.unknown,
           retentionPeriod: retentionDuration,
         );
         return false;
@@ -372,10 +374,14 @@ class JobStateNotifier extends Notifier<JobState> {
         final retentionService = ref.read(failedScanRetentionServiceProvider);
         final retentionDuration = retentionService.getRetentionDuration();
 
+        // Categorize the failure
+        final failureReason = FailureCategorizer.categorize(null, errorMessage);
+
         await database.saveFailedScan(
           jobId: jobId,
           imagePath: failedScan.imagePath,
           errorMessage: updatedMessage,
+          failureReason: failureReason,
           retentionPeriod: retentionDuration,
         );
         debugPrint('[JobStateNotifier] Updated failed scan error: $jobId');
@@ -572,8 +578,13 @@ class JobStateNotifier extends Notifier<JobState> {
           await _sseSubscriptions[jobId]?.cancel();
           _sseSubscriptions.remove(jobId);
 
-          // Save failed scan to database
-          await _saveFailedScan(serverJobId, job.imagePath, errorMessage);
+          // Save failed scan to database with specific failure reason
+          await _saveFailedScan(
+            serverJobId,
+            job.imagePath,
+            errorMessage,
+            failureReason: FailureReason.noBooksFound,
+          );
           return;
         }
 
@@ -609,8 +620,14 @@ class JobStateNotifier extends Notifier<JobState> {
         _sseSubscriptions[jobId]?.cancel();
         _sseSubscriptions.remove(jobId);
 
-        // Save failed scan to database
-        await _saveFailedScan(serverJobId, job.imagePath, errorMessage);
+        // Categorize and save failed scan to database
+        final failureReason = FailureCategorizer.categorize(null, errorMessage);
+        await _saveFailedScan(
+          serverJobId,
+          job.imagePath,
+          errorMessage,
+          failureReason: failureReason,
+        );
     }
   }
 
@@ -618,8 +635,9 @@ class JobStateNotifier extends Notifier<JobState> {
   Future<void> _saveFailedScan(
     String jobId,
     String imagePath,
-    String errorMessage,
-  ) async {
+    String errorMessage, {
+    FailureReason? failureReason,
+  }) async {
     try {
       // Move image from temp to persistent failed_scans directory
       final persistentPath = await FailedScansDirectory.moveImage(imagePath, jobId);
@@ -629,14 +647,18 @@ class JobStateNotifier extends Notifier<JobState> {
       final retentionService = ref.read(failedScanRetentionServiceProvider);
       final retentionDuration = retentionService.getRetentionDuration();
 
+      // Use provided reason or categorize based on error message
+      final reason = failureReason ?? FailureCategorizer.categorize(null, errorMessage);
+
       final database = ref.read(databaseProvider);
       await database.saveFailedScan(
         jobId: jobId,
         imagePath: persistentPath,
         errorMessage: errorMessage,
+        failureReason: reason,
         retentionPeriod: retentionDuration,
       );
-      debugPrint('[JobStateNotifier] Failed scan saved: $jobId');
+      debugPrint('[JobStateNotifier] Failed scan saved: $jobId (reason: ${reason.label})');
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to save failed scan: $e');
     }

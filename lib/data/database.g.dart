@@ -577,6 +577,16 @@ class $FailedScansTable extends FailedScans
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  @override
+  late final GeneratedColumnWithTypeConverter<FailureReason, String>
+  failureReason = GeneratedColumn<String>(
+    'failure_reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(FailureReason.unknown.name),
+  ).withConverter<FailureReason>($FailedScansTable.$converterfailureReason);
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -605,6 +615,7 @@ class $FailedScansTable extends FailedScans
     jobId,
     imagePath,
     errorMessage,
+    failureReason,
     createdAt,
     expiresAt,
   ];
@@ -691,6 +702,12 @@ class $FailedScansTable extends FailedScans
         DriftSqlType.string,
         data['${effectivePrefix}error_message'],
       )!,
+      failureReason: $FailedScansTable.$converterfailureReason.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}failure_reason'],
+        )!,
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -706,6 +723,11 @@ class $FailedScansTable extends FailedScans
   $FailedScansTable createAlias(String alias) {
     return $FailedScansTable(attachedDatabase, alias);
   }
+
+  static JsonTypeConverter2<FailureReason, String, String>
+  $converterfailureReason = const EnumNameConverter<FailureReason>(
+    FailureReason.values,
+  );
 }
 
 class FailedScan extends DataClass implements Insertable<FailedScan> {
@@ -713,6 +735,7 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
   final String jobId;
   final String imagePath;
   final String errorMessage;
+  final FailureReason failureReason;
   final int createdAt;
   final int expiresAt;
   const FailedScan({
@@ -720,6 +743,7 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
     required this.jobId,
     required this.imagePath,
     required this.errorMessage,
+    required this.failureReason,
     required this.createdAt,
     required this.expiresAt,
   });
@@ -730,6 +754,11 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
     map['job_id'] = Variable<String>(jobId);
     map['image_path'] = Variable<String>(imagePath);
     map['error_message'] = Variable<String>(errorMessage);
+    {
+      map['failure_reason'] = Variable<String>(
+        $FailedScansTable.$converterfailureReason.toSql(failureReason),
+      );
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['expires_at'] = Variable<int>(expiresAt);
     return map;
@@ -741,6 +770,7 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
       jobId: Value(jobId),
       imagePath: Value(imagePath),
       errorMessage: Value(errorMessage),
+      failureReason: Value(failureReason),
       createdAt: Value(createdAt),
       expiresAt: Value(expiresAt),
     );
@@ -756,6 +786,9 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
       jobId: serializer.fromJson<String>(json['jobId']),
       imagePath: serializer.fromJson<String>(json['imagePath']),
       errorMessage: serializer.fromJson<String>(json['errorMessage']),
+      failureReason: $FailedScansTable.$converterfailureReason.fromJson(
+        serializer.fromJson<String>(json['failureReason']),
+      ),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       expiresAt: serializer.fromJson<int>(json['expiresAt']),
     );
@@ -768,6 +801,9 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
       'jobId': serializer.toJson<String>(jobId),
       'imagePath': serializer.toJson<String>(imagePath),
       'errorMessage': serializer.toJson<String>(errorMessage),
+      'failureReason': serializer.toJson<String>(
+        $FailedScansTable.$converterfailureReason.toJson(failureReason),
+      ),
       'createdAt': serializer.toJson<int>(createdAt),
       'expiresAt': serializer.toJson<int>(expiresAt),
     };
@@ -778,6 +814,7 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
     String? jobId,
     String? imagePath,
     String? errorMessage,
+    FailureReason? failureReason,
     int? createdAt,
     int? expiresAt,
   }) => FailedScan(
@@ -785,6 +822,7 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
     jobId: jobId ?? this.jobId,
     imagePath: imagePath ?? this.imagePath,
     errorMessage: errorMessage ?? this.errorMessage,
+    failureReason: failureReason ?? this.failureReason,
     createdAt: createdAt ?? this.createdAt,
     expiresAt: expiresAt ?? this.expiresAt,
   );
@@ -796,6 +834,9 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
       errorMessage: data.errorMessage.present
           ? data.errorMessage.value
           : this.errorMessage,
+      failureReason: data.failureReason.present
+          ? data.failureReason.value
+          : this.failureReason,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
     );
@@ -808,6 +849,7 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
           ..write('jobId: $jobId, ')
           ..write('imagePath: $imagePath, ')
           ..write('errorMessage: $errorMessage, ')
+          ..write('failureReason: $failureReason, ')
           ..write('createdAt: $createdAt, ')
           ..write('expiresAt: $expiresAt')
           ..write(')'))
@@ -815,8 +857,15 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, jobId, imagePath, errorMessage, createdAt, expiresAt);
+  int get hashCode => Object.hash(
+    id,
+    jobId,
+    imagePath,
+    errorMessage,
+    failureReason,
+    createdAt,
+    expiresAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -825,6 +874,7 @@ class FailedScan extends DataClass implements Insertable<FailedScan> {
           other.jobId == this.jobId &&
           other.imagePath == this.imagePath &&
           other.errorMessage == this.errorMessage &&
+          other.failureReason == this.failureReason &&
           other.createdAt == this.createdAt &&
           other.expiresAt == this.expiresAt);
 }
@@ -834,6 +884,7 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
   final Value<String> jobId;
   final Value<String> imagePath;
   final Value<String> errorMessage;
+  final Value<FailureReason> failureReason;
   final Value<int> createdAt;
   final Value<int> expiresAt;
   const FailedScansCompanion({
@@ -841,6 +892,7 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
     this.jobId = const Value.absent(),
     this.imagePath = const Value.absent(),
     this.errorMessage = const Value.absent(),
+    this.failureReason = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.expiresAt = const Value.absent(),
   });
@@ -849,6 +901,7 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
     required String jobId,
     required String imagePath,
     required String errorMessage,
+    this.failureReason = const Value.absent(),
     required int createdAt,
     required int expiresAt,
   }) : jobId = Value(jobId),
@@ -861,6 +914,7 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
     Expression<String>? jobId,
     Expression<String>? imagePath,
     Expression<String>? errorMessage,
+    Expression<String>? failureReason,
     Expression<int>? createdAt,
     Expression<int>? expiresAt,
   }) {
@@ -869,6 +923,7 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
       if (jobId != null) 'job_id': jobId,
       if (imagePath != null) 'image_path': imagePath,
       if (errorMessage != null) 'error_message': errorMessage,
+      if (failureReason != null) 'failure_reason': failureReason,
       if (createdAt != null) 'created_at': createdAt,
       if (expiresAt != null) 'expires_at': expiresAt,
     });
@@ -879,6 +934,7 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
     Value<String>? jobId,
     Value<String>? imagePath,
     Value<String>? errorMessage,
+    Value<FailureReason>? failureReason,
     Value<int>? createdAt,
     Value<int>? expiresAt,
   }) {
@@ -887,6 +943,7 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
       jobId: jobId ?? this.jobId,
       imagePath: imagePath ?? this.imagePath,
       errorMessage: errorMessage ?? this.errorMessage,
+      failureReason: failureReason ?? this.failureReason,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,
     );
@@ -907,6 +964,11 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
     if (errorMessage.present) {
       map['error_message'] = Variable<String>(errorMessage.value);
     }
+    if (failureReason.present) {
+      map['failure_reason'] = Variable<String>(
+        $FailedScansTable.$converterfailureReason.toSql(failureReason.value),
+      );
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -923,6 +985,7 @@ class FailedScansCompanion extends UpdateCompanion<FailedScan> {
           ..write('jobId: $jobId, ')
           ..write('imagePath: $imagePath, ')
           ..write('errorMessage: $errorMessage, ')
+          ..write('failureReason: $failureReason, ')
           ..write('createdAt: $createdAt, ')
           ..write('expiresAt: $expiresAt')
           ..write(')'))
@@ -1202,6 +1265,7 @@ typedef $$FailedScansTableCreateCompanionBuilder =
       required String jobId,
       required String imagePath,
       required String errorMessage,
+      Value<FailureReason> failureReason,
       required int createdAt,
       required int expiresAt,
     });
@@ -1211,6 +1275,7 @@ typedef $$FailedScansTableUpdateCompanionBuilder =
       Value<String> jobId,
       Value<String> imagePath,
       Value<String> errorMessage,
+      Value<FailureReason> failureReason,
       Value<int> createdAt,
       Value<int> expiresAt,
     });
@@ -1242,6 +1307,12 @@ class $$FailedScansTableFilterComposer
   ColumnFilters<String> get errorMessage => $composableBuilder(
     column: $table.errorMessage,
     builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<FailureReason, FailureReason, String>
+  get failureReason => $composableBuilder(
+    column: $table.failureReason,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
   ColumnFilters<int> get createdAt => $composableBuilder(
@@ -1284,6 +1355,11 @@ class $$FailedScansTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get failureReason => $composableBuilder(
+    column: $table.failureReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -1317,6 +1393,12 @@ class $$FailedScansTableAnnotationComposer
     column: $table.errorMessage,
     builder: (column) => column,
   );
+
+  GeneratedColumnWithTypeConverter<FailureReason, String> get failureReason =>
+      $composableBuilder(
+        column: $table.failureReason,
+        builder: (column) => column,
+      );
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -1360,6 +1442,7 @@ class $$FailedScansTableTableManager
                 Value<String> jobId = const Value.absent(),
                 Value<String> imagePath = const Value.absent(),
                 Value<String> errorMessage = const Value.absent(),
+                Value<FailureReason> failureReason = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> expiresAt = const Value.absent(),
               }) => FailedScansCompanion(
@@ -1367,6 +1450,7 @@ class $$FailedScansTableTableManager
                 jobId: jobId,
                 imagePath: imagePath,
                 errorMessage: errorMessage,
+                failureReason: failureReason,
                 createdAt: createdAt,
                 expiresAt: expiresAt,
               ),
@@ -1376,6 +1460,7 @@ class $$FailedScansTableTableManager
                 required String jobId,
                 required String imagePath,
                 required String errorMessage,
+                Value<FailureReason> failureReason = const Value.absent(),
                 required int createdAt,
                 required int expiresAt,
               }) => FailedScansCompanion.insert(
@@ -1383,6 +1468,7 @@ class $$FailedScansTableTableManager
                 jobId: jobId,
                 imagePath: imagePath,
                 errorMessage: errorMessage,
+                failureReason: failureReason,
                 createdAt: createdAt,
                 expiresAt: expiresAt,
               ),

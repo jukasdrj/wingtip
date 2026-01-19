@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:wingtip/core/device_id_provider.dart';
 import 'package:wingtip/core/restart_widget.dart';
 import 'package:wingtip/core/theme.dart';
+import 'package:wingtip/data/database_provider.dart';
 import 'package:wingtip/data/failed_scans_repository.dart';
 import 'package:wingtip/features/camera/image_processing_metrics_provider.dart';
 import 'package:wingtip/services/csv_export_service_provider.dart';
@@ -101,6 +102,15 @@ class DebugSettingsPage extends ConsumerWidget {
               icon: const Icon(Icons.error_outline),
               label: const Text('Show Error Snackbar'),
             ),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Failed Scan Analytics',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            const _FailedScanAnalyticsSection(),
             const SizedBox(height: 32),
             const Divider(),
             const SizedBox(height: 16),
@@ -709,6 +719,237 @@ class _MetricRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FailedScanAnalyticsSection extends ConsumerStatefulWidget {
+  const _FailedScanAnalyticsSection();
+
+  @override
+  ConsumerState<_FailedScanAnalyticsSection> createState() =>
+      _FailedScanAnalyticsSectionState();
+}
+
+class _FailedScanAnalyticsSectionState
+    extends ConsumerState<_FailedScanAnalyticsSection> {
+  Map<String, dynamic>? _analytics;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAnalytics();
+  }
+
+  Future<void> _loadAnalytics() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final database = ref.read(databaseProvider);
+      final failureBreakdown = await database.getFailedScansAnalytics();
+      final totalFailedScans = await database.getFailedScansCount();
+
+      // Get total books for success rate calculation
+      final totalBooks = await database.getAllBooks();
+      final totalScans = totalFailedScans + totalBooks.length;
+      final successRate = totalScans > 0
+          ? ((totalBooks.length / totalScans) * 100)
+          : 0.0;
+
+      if (mounted) {
+        setState(() {
+          _analytics = {
+            'breakdown': failureBreakdown,
+            'totalFailed': totalFailedScans,
+            'successRate': successRate,
+          };
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _formatPercentage(int count, int total) {
+    if (total == 0) return '0%';
+    return '${((count / total) * 100).toStringAsFixed(1)}%';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_analytics == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Unable to load analytics',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textSecondary,
+                ),
+          ),
+        ),
+      );
+    }
+
+    final breakdown = _analytics!['breakdown'] as Map<dynamic, int>;
+    final totalFailed = _analytics!['totalFailed'] as int;
+    final successRate = _analytics!['successRate'] as double;
+
+    if (totalFailed == 0) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'No failed scans yet',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Analytics will appear here after failed scans occur',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Sort breakdown by count descending and filter out zero counts
+    final sortedBreakdown = breakdown.entries
+        .where((entry) => entry.value > 0)
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Total failed scans and success rate
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Total Failed Scans',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                Text(
+                  '$totalFailed',
+                  style: AppTheme.monoStyle(fontSize: 16).copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.internationalOrange,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Success Rate',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                Text(
+                  '${successRate.toStringAsFixed(1)}%',
+                  style: AppTheme.monoStyle(fontSize: 16).copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: successRate >= 80 ? Colors.green : AppTheme.internationalOrange,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Failure breakdown
+            Text(
+              'Failure Analysis',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 12),
+
+            // Display each failure reason with percentage
+            ...sortedBreakdown.map((entry) {
+              final reason = entry.key as dynamic;
+              final count = entry.value;
+              final percentage = _formatPercentage(count, totalFailed);
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          reason.label,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        Text(
+                          '$count ($percentage)',
+                          style: AppTheme.monoStyle(fontSize: 14).copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: count / totalFailed,
+                        backgroundColor: AppTheme.borderGray,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          AppTheme.internationalOrange,
+                        ),
+                        minHeight: 4,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _loadAnalytics,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh Analytics'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

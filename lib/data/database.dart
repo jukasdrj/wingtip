@@ -22,12 +22,40 @@ class Books extends Table {
   Set<Column> get primaryKey => {isbn};
 }
 
+/// Enum for categorizing failed scan reasons
+enum FailureReason {
+  networkError,
+  qualityTooLow,
+  noBooksFound,
+  serverError,
+  rateLimited,
+  unknown;
+
+  String get label {
+    switch (this) {
+      case FailureReason.networkError:
+        return 'Network Error';
+      case FailureReason.qualityTooLow:
+        return 'Quality Too Low';
+      case FailureReason.noBooksFound:
+        return 'No Books Found';
+      case FailureReason.serverError:
+        return 'Server Error';
+      case FailureReason.rateLimited:
+        return 'Rate Limited';
+      case FailureReason.unknown:
+        return 'Unknown';
+    }
+  }
+}
+
 @DataClassName('FailedScan')
 class FailedScans extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get jobId => text()();
   TextColumn get imagePath => text()();
   TextColumn get errorMessage => text()();
+  TextColumn get failureReason => textEnum<FailureReason>().withDefault(Constant(FailureReason.unknown.name))();
   IntColumn get createdAt => integer()();
   IntColumn get expiresAt => integer()();
 }
@@ -39,7 +67,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.test(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -133,6 +161,10 @@ class AppDatabase extends _$AppDatabase {
         if (from < 3) {
           // Add review_needed column
           await m.addColumn(books, books.reviewNeeded);
+        }
+        if (from < 4) {
+          // Add failure_reason column to failed_scans
+          await m.addColumn(failedScans, failedScans.failureReason);
         }
       },
     );
@@ -267,6 +299,7 @@ class AppDatabase extends _$AppDatabase {
     required String jobId,
     required String imagePath,
     required String errorMessage,
+    FailureReason failureReason = FailureReason.unknown,
     Duration retentionPeriod = const Duration(days: 7),
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -276,6 +309,7 @@ class AppDatabase extends _$AppDatabase {
       jobId: Value(jobId),
       imagePath: Value(imagePath),
       errorMessage: Value(errorMessage),
+      failureReason: Value(failureReason),
       createdAt: Value(now),
       expiresAt: Value(expiresAt),
     );
@@ -292,6 +326,30 @@ class AppDatabase extends _$AppDatabase {
   // Delete a failed scan by job ID
   Future<void> deleteFailedScan(String jobId) async {
     await (delete(failedScans)..where((t) => t.jobId.equals(jobId))).go();
+  }
+
+  // Get analytics for failed scans
+  Future<Map<FailureReason, int>> getFailedScansAnalytics() async {
+    final allScans = await select(failedScans).get();
+
+    final analytics = <FailureReason, int>{};
+    for (final reason in FailureReason.values) {
+      analytics[reason] = 0;
+    }
+
+    for (final scan in allScans) {
+      analytics[scan.failureReason] = (analytics[scan.failureReason] ?? 0) + 1;
+    }
+
+    return analytics;
+  }
+
+  // Get total count of failed scans
+  Future<int> getFailedScansCount() async {
+    final countQuery = selectOnly(failedScans)
+      ..addColumns([failedScans.id.count()]);
+    final result = await countQuery.getSingle();
+    return result.read(failedScans.id.count()) ?? 0;
   }
 }
 
