@@ -24,63 +24,59 @@ void main() async {
   final appStartTime = DateTime.now();
   debugPrint('[Performance] App started at ${appStartTime.toIso8601String()}');
 
-  // Hide system UI for full immersion
+  // Hide system UI for full immersion (lightweight operation)
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
 
-  // Create provider container for startup initialization
+  // Create provider container (deferred provider initialization)
   final container = ProviderContainer();
 
-  // Run cleanup on startup (non-blocking)
-  final cleanupService = container.read(failedScansCleanupServiceProvider);
-  cleanupService.runFullCleanup().catchError((error) {
-    debugPrint('[Startup] Cleanup failed: $error');
-    return 0;
-  });
-
-  // Minimum splash display time (500ms)
-  final splashTimer = Future.delayed(const Duration(milliseconds: 500));
-
-  // Check camera permission status
+  // Check camera permission status (fast system call)
   final cameraPermissionStatus = await Permission.camera.status;
 
-  // Only initialize camera if permission is already granted
+  // Optimization: Start all async operations in parallel
+  final futures = <Future<void>>[];
+
+  // 1. Minimum splash time (reduced from 500ms to 300ms for faster perceived startup)
+  final splashTimer = Future.delayed(const Duration(milliseconds: 300));
+  futures.add(splashTimer);
+
+  // 2. Initialize camera if permission granted (heavyweight, but necessary for camera screen)
+  Future<void>? cameraInitFuture;
   if (cameraPermissionStatus.isGranted) {
-    // Initialize camera in background during startup
-    final cameraService = CameraService();
-
-    // Load camera settings to restore Night Mode preference
-    final prefs = await SharedPreferences.getInstance();
-    final nightModeEnabled = prefs.getBool('camera_night_mode_enabled') ?? false;
-
-    final cameraInitFuture = cameraService.initialize(restoreNightMode: nightModeEnabled);
-
-    // Performance logging: Camera initialization started
     debugPrint('[Performance] Camera initialization started');
 
-    // Wait for both camera initialization and minimum splash time
-    await Future.wait([cameraInitFuture, splashTimer]);
+    cameraInitFuture = Future(() async {
+      final cameraService = CameraService();
 
-    // Performance logging: Cold start time
-    final coldStartTime = DateTime.now().difference(appStartTime);
-    debugPrint('[Performance] Cold start completed in ${coldStartTime.inMilliseconds}ms');
-
-    // Record cold start time to metrics
-    try {
+      // Load SharedPreferences once for camera settings
       final prefs = await SharedPreferences.getInstance();
-      final metricsService = PerformanceMetricsService(prefs);
-      await metricsService.recordColdStart(coldStartTime.inMilliseconds);
-    } catch (e) {
-      debugPrint('[Performance] Failed to record cold start metric: $e');
-    }
+      final nightModeEnabled = prefs.getBool('camera_night_mode_enabled') ?? false;
 
-    if (cameraService.initializationDuration != null) {
-      debugPrint('[Performance] Camera initialization took ${cameraService.initializationDuration!.inMilliseconds}ms');
-    }
-  } else {
-    // Wait for minimum splash time even without camera initialization
-    await splashTimer;
-    debugPrint('[Performance] Camera permission not granted, showing primer screen');
+      await cameraService.initialize(restoreNightMode: nightModeEnabled);
+
+      if (cameraService.initializationDuration != null) {
+        debugPrint('[Performance] Camera initialization took ${cameraService.initializationDuration!.inMilliseconds}ms');
+      }
+    });
+    futures.add(cameraInitFuture);
   }
+
+  // Wait for critical startup tasks
+  await Future.wait(futures);
+
+  // Performance logging: Cold start time
+  final coldStartTime = DateTime.now().difference(appStartTime);
+  debugPrint('[Performance] Cold start completed in ${coldStartTime.inMilliseconds}ms');
+
+  // Deferred: Record metrics asynchronously after app is interactive
+  if (cameraPermissionStatus.isGranted) {
+    _recordColdStartMetrics(coldStartTime.inMilliseconds).catchError((e) {
+      debugPrint('[Performance] Failed to record cold start metric: $e');
+    });
+  }
+
+  // Deferred: Run cleanup in background after app launch (non-blocking)
+  _deferredCleanup(container);
 
   runApp(
     // Wrap the app in RestartWidget to enable full app restarts
@@ -91,6 +87,30 @@ void main() async {
       ),
     ),
   );
+}
+
+/// Deferred: Record cold start metrics after app is interactive
+Future<void> _recordColdStartMetrics(int coldStartMs) async {
+  final prefs = await SharedPreferences.getInstance();
+  final metricsService = PerformanceMetricsService(prefs);
+  await metricsService.recordColdStart(coldStartMs);
+}
+
+/// Deferred: Run cleanup service in background after app launch
+void _deferredCleanup(ProviderContainer container) {
+  // Defer cleanup by 2 seconds to avoid competing with initial UI render
+  Future.delayed(const Duration(seconds: 2), () {
+    try {
+      final cleanupService = container.read(failedScansCleanupServiceProvider);
+      cleanupService.runFullCleanup().catchError((error) {
+        debugPrint('[Startup] Deferred cleanup failed: $error');
+        return 0;
+      });
+      debugPrint('[Startup] Deferred cleanup initiated');
+    } catch (e) {
+      debugPrint('[Startup] Failed to initiate cleanup: $e');
+    }
+  });
 }
 
 class MyApp extends StatefulWidget {

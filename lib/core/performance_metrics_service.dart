@@ -6,6 +6,7 @@ import 'package:wingtip/core/performance_metrics.dart';
 /// Service for tracking and persisting performance metrics
 class PerformanceMetricsService {
   static const String _coldStartKey = 'perf_cold_start_ms';
+  static const String _coldStartHistoryKey = 'perf_cold_start_history'; // New: track last 20 cold starts
   static const String _shutterLatenciesKey = 'perf_shutter_latencies';
   static const String _uploadTimesKey = 'perf_upload_times';
   static const String _sseFirstResultTimesKey = 'perf_sse_first_result_times';
@@ -15,10 +16,27 @@ class PerformanceMetricsService {
 
   PerformanceMetricsService(this._prefs);
 
-  /// Record cold start time
+  /// Record cold start time with historical tracking
   Future<void> recordColdStart(int durationMs) async {
     await _prefs.setInt(_coldStartKey, durationMs);
-    debugPrint('[PerformanceMetrics] Cold start: ${durationMs}ms');
+
+    // Track historical cold start times
+    final history = _getIntList(_coldStartHistoryKey);
+    history.add(durationMs);
+
+    // Keep only last 20 measurements
+    if (history.length > 20) {
+      history.removeRange(0, history.length - 20);
+    }
+
+    await _prefs.setString(_coldStartHistoryKey, jsonEncode(history));
+
+    // Calculate statistics
+    final avgColdStart = history.isEmpty ? durationMs : _average(history);
+    final minColdStart = history.isEmpty ? durationMs : history.reduce((a, b) => a < b ? a : b);
+    final maxColdStart = history.isEmpty ? durationMs : history.reduce((a, b) => a > b ? a : b);
+
+    debugPrint('[PerformanceMetrics] Cold start: ${durationMs}ms (avg: ${avgColdStart.toStringAsFixed(0)}ms, min: ${minColdStart}ms, max: ${maxColdStart}ms over ${history.length} launches)');
   }
 
   /// Record shutter latency
@@ -89,6 +107,7 @@ class PerformanceMetricsService {
   /// Reset all metrics
   Future<void> resetMetrics() async {
     await _prefs.remove(_coldStartKey);
+    await _prefs.remove(_coldStartHistoryKey);
     await _prefs.remove(_shutterLatenciesKey);
     await _prefs.remove(_uploadTimesKey);
     await _prefs.remove(_sseFirstResultTimesKey);

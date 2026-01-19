@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
@@ -380,6 +381,8 @@ class AppDatabase extends _$AppDatabase {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
+    final initStart = DateTime.now();
+
     // Ensure FTS5 is available
     if (Platform.isAndroid) {
       await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
@@ -388,12 +391,24 @@ LazyDatabase _openConnection() {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'wingtip.db'));
 
-    return NativeDatabase(
+    final db = NativeDatabase(
       file,
       setup: (database) {
+        // Performance optimizations for SQLite
+        database.execute('PRAGMA journal_mode = WAL'); // Write-Ahead Logging for better concurrency
+        database.execute('PRAGMA synchronous = NORMAL'); // Faster commits
+        database.execute('PRAGMA temp_store = MEMORY'); // Use memory for temp tables
+        database.execute('PRAGMA mmap_size = 30000000'); // 30MB memory-mapped I/O
+        database.execute('PRAGMA page_size = 4096'); // Optimal page size for iOS
+
         // Verify FTS5 is available
         database.execute('PRAGMA compile_options');
       },
     );
+
+    final initDuration = DateTime.now().difference(initStart);
+    debugPrint('[Database] Opened database in ${initDuration.inMilliseconds}ms');
+
+    return db;
   });
 }
