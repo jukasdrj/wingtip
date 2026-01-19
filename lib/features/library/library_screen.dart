@@ -6,11 +6,18 @@ import '../../core/theme.dart';
 import '../../data/database.dart';
 import 'library_provider.dart';
 
-class LibraryScreen extends ConsumerWidget {
+class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  final Set<String> _seenBookIsbns = {};
+
+  @override
+  Widget build(BuildContext context) {
     final booksAsync = ref.watch(allBooksProvider);
 
     return Scaffold(
@@ -50,7 +57,19 @@ class LibraryScreen extends ConsumerWidget {
             ),
             itemCount: books.length,
             itemBuilder: (context, index) {
-              return BookCard(book: books[index]);
+              final book = books[index];
+              final isNew = !_seenBookIsbns.contains(book.isbn);
+
+              // Mark this book as seen
+              if (isNew) {
+                _seenBookIsbns.add(book.isbn);
+              }
+
+              return AnimatedBookCard(
+                key: ValueKey(book.isbn),
+                book: book,
+                isNew: isNew,
+              );
             },
           );
         },
@@ -67,6 +86,77 @@ class LibraryScreen extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class AnimatedBookCard extends StatefulWidget {
+  final Book book;
+  final bool isNew;
+
+  const AnimatedBookCard({
+    super.key,
+    required this.book,
+    required this.isNew,
+  });
+
+  @override
+  State<AnimatedBookCard> createState() => _AnimatedBookCardState();
+}
+
+class _AnimatedBookCardState extends State<AnimatedBookCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    ));
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    ));
+
+    // Only animate if this is a new book
+    if (widget.isNew) {
+      _controller.forward();
+    } else {
+      _controller.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: BookCard(book: widget.book),
       ),
     );
   }
