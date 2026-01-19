@@ -20,6 +20,7 @@ import 'widgets/empty_library_state.dart';
 import 'widgets/failed_scan_card.dart' as failed_card;
 import 'widgets/filter_bottom_sheet.dart';
 import 'collections_provider.dart';
+import 'library_statistics_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -723,6 +724,29 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                       ),
                     );
                   },
+                ),
+                const SizedBox(width: 8),
+                // Statistics Button
+                OutlinedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => const LibraryStatisticsScreen(),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.textSecondary,
+                    side: const BorderSide(
+                      color: AppTheme.borderGray,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  child: const Icon(
+                    Icons.bar_chart,
+                    size: 16,
+                  ),
                 ),
               ],
             ),

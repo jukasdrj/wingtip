@@ -750,6 +750,141 @@ class AppDatabase extends _$AppDatabase {
     final updated = await (update(collections)..where((t) => t.id.equals(collectionId))).write(companion);
     return updated > 0;
   }
+
+  // Statistics Methods
+
+  // Get total number of books
+  Future<int> getTotalBooksCount() async {
+    final countQuery = selectOnly(books)
+      ..addColumns([books.isbn.count()]);
+    final result = await countQuery.getSingle();
+    return result.read(books.isbn.count()) ?? 0;
+  }
+
+  // Get books added in a specific time range
+  Future<int> getBooksCountInRange(DateTime start, DateTime end) async {
+    final startMs = start.millisecondsSinceEpoch;
+    final endMs = end.millisecondsSinceEpoch;
+
+    final countQuery = selectOnly(books)
+      ..addColumns([books.isbn.count()])
+      ..where(books.addedDate.isBiggerOrEqualValue(startMs) & books.addedDate.isSmallerOrEqualValue(endMs));
+    final result = await countQuery.getSingle();
+    return result.read(books.isbn.count()) ?? 0;
+  }
+
+  // Get top authors with book counts
+  Future<List<AuthorStats>> getTopAuthors({int limit = 5}) async {
+    final query = customSelect(
+      '''SELECT author, COUNT(*) as book_count
+         FROM books
+         GROUP BY author
+         ORDER BY book_count DESC
+         LIMIT ?''',
+      variables: [Variable.withInt(limit)],
+      readsFrom: {books},
+    );
+
+    final rows = await query.get();
+    return rows.map((row) {
+      return AuthorStats(
+        author: row.read<String>('author'),
+        bookCount: row.read<int>('book_count'),
+      );
+    }).toList();
+  }
+
+  // Get format distribution
+  Future<List<FormatStats>> getFormatStats() async {
+    final query = customSelect(
+      '''SELECT
+           CASE
+             WHEN format IS NULL OR format = '' THEN 'Unknown'
+             ELSE format
+           END as format_group,
+           COUNT(*) as book_count
+         FROM books
+         GROUP BY format_group
+         ORDER BY book_count DESC''',
+      readsFrom: {books},
+    );
+
+    final rows = await query.get();
+    return rows.map((row) {
+      return FormatStats(
+        format: row.read<String>('format_group'),
+        bookCount: row.read<int>('book_count'),
+      );
+    }).toList();
+  }
+
+  // Get scanning streak (consecutive days with books added)
+  Future<int> getScanningStreak() async {
+    final allBooks = await (select(books)
+      ..orderBy([(t) => OrderingTerm.desc(t.addedDate)])).get();
+
+    if (allBooks.isEmpty) return 0;
+
+    // Group books by date (ignoring time)
+    final datesWithBooks = <DateTime>{};
+    for (final book in allBooks) {
+      final date = DateTime.fromMillisecondsSinceEpoch(book.addedDate);
+      final dateOnly = DateTime(date.year, date.month, date.day);
+      datesWithBooks.add(dateOnly);
+    }
+
+    // Sort dates descending
+    final sortedDates = datesWithBooks.toList()..sort((a, b) => b.compareTo(a));
+
+    // Calculate streak from today
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+
+    int streak = 0;
+    DateTime checkDate = todayOnly;
+
+    for (final date in sortedDates) {
+      if (date.isAtSameMomentAs(checkDate)) {
+        streak++;
+        checkDate = checkDate.subtract(const Duration(days: 1));
+      } else if (date.isBefore(checkDate)) {
+        // Gap found, but check if it's the first iteration and we're checking yesterday
+        if (streak == 0 && date.isAtSameMomentAs(checkDate.subtract(const Duration(days: 1)))) {
+          streak++;
+          checkDate = date.subtract(const Duration(days: 1));
+        } else {
+          break;
+        }
+      }
+    }
+
+    return streak;
+  }
+
+  // Get books added per scanning session (approximation based on time clustering)
+  Future<double> getAverageBooksPerSession() async {
+    final allBooks = await (select(books)
+      ..orderBy([(t) => OrderingTerm.asc(t.addedDate)])).get();
+
+    if (allBooks.isEmpty) return 0.0;
+    if (allBooks.length == 1) return 1.0;
+
+    // Consider books added within 30 minutes of each other as the same session
+    const sessionGapMinutes = 30;
+    int sessionCount = 1;
+
+    for (int i = 1; i < allBooks.length; i++) {
+      final prevTime = DateTime.fromMillisecondsSinceEpoch(allBooks[i - 1].addedDate);
+      final currTime = DateTime.fromMillisecondsSinceEpoch(allBooks[i].addedDate);
+      final diff = currTime.difference(prevTime);
+
+      if (diff.inMinutes > sessionGapMinutes) {
+        sessionCount++;
+      }
+    }
+
+    return allBooks.length / sessionCount;
+  }
 }
 
 // Helper class for collections with book counts
@@ -763,6 +898,28 @@ class CollectionWithCount {
     required this.id,
     required this.name,
     required this.createdAt,
+    required this.bookCount,
+  });
+}
+
+// Helper class for author statistics
+class AuthorStats {
+  final String author;
+  final int bookCount;
+
+  AuthorStats({
+    required this.author,
+    required this.bookCount,
+  });
+}
+
+// Helper class for format statistics
+class FormatStats {
+  final String format;
+  final int bookCount;
+
+  FormatStats({
+    required this.format,
     required this.bookCount,
   });
 }

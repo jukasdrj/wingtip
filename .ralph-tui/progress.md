@@ -137,3 +137,12 @@ animated grid re-layout"},{"content":"Run flutter analyze","status":"completed",
 no errors  \n✅ Committed with proper message  \n\n### Technical Details:\n- Filters are applied at the SQL level for date/review status (optimal performance)\n- Format filter is applied in Dart after SQL query (due to complex string matching)\n- Filter state is session-only (not persisted to SharedPreferences)\n- Badge displays count of active filters (1-3)\n- Swiss Utility design maintained with OLED black, 1px borders, and International Orange accents\n- Haptic feedback on all interactions\n\n
 
 ---
+## ✓ Iteration 15 - US-167: Collections/Tags
+*2026-01-19T16:52:13.987Z (393s)*
+
+**Status:** Completed
+
+**Notes:**
+(lib/features/library/library_provider.dart:121-155)\n- Updated `booksProvider` to check for selected collection\n- When collection is selected, shows only books in that collection\n- Otherwise shows all books with existing search/filter/sort functionality\n\n### Quality\n- ✅ flutter analyze shows no errors\n- ✅ Follows Swiss Utility design with OLED black backgrounds and 1px borders\n- ✅ iOS-first haptic feedback at all interaction stages\n- ✅ Uses Riverpod 3.x Notifier pattern consistently\n\n
+
+---
