@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -78,7 +79,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                             HapticFeedback.lightImpact();
                             final navigator = Navigator.of(context);
                             final result = await navigator.push<bool>(
-                              MaterialPageRoute(
+                              CupertinoPageRoute(
                                 builder: (context) => EditBookScreen(book: widget.book),
                               ),
                             );

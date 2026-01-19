@@ -1,8 +1,10 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/theme.dart';
 import '../../core/performance_overlay_provider.dart';
 import '../../data/database.dart';
@@ -11,6 +13,7 @@ import '../../data/failed_scans_repository.dart';
 import '../../features/talaria/job_state_provider.dart';
 import 'library_provider.dart';
 import 'book_detail_screen.dart';
+import 'edit_book_screen.dart';
 import 'widgets/empty_library_state.dart';
 import 'widgets/failed_scan_card.dart' as failed_card;
 
@@ -375,6 +378,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     );
   }
 
+  Future<void> _refreshLibrary() async {
+    // Haptic feedback for pull-to-refresh
+    HapticFeedback.lightImpact();
+
+    // Invalidate the books provider to trigger a refresh
+    ref.invalidate(booksProvider);
+
+    // Wait for the provider to rebuild
+    await ref.read(booksProvider.future);
+  }
+
   Widget _buildBooksTab(BuildContext context, AsyncValue<List<Book>> booksAsync) {
     return Column(
       children: [
@@ -495,7 +509,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   final searchQuery = ref.watch(searchQueryProvider);
                   // Show empty state only when no search is active
                   if (searchQuery.isEmpty) {
-                    return const EmptyLibraryState();
+                    return RefreshIndicator(
+                      onRefresh: _refreshLibrary,
+                      color: AppTheme.internationalOrange,
+                      backgroundColor: AppTheme.borderGray,
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: SizedBox(
+                          height: MediaQuery.of(context).size.height - 300,
+                          child: const EmptyLibraryState(),
+                        ),
+                      ),
+                    );
                   }
                   // Show "No books found" for search results
                   return Center(
@@ -508,7 +533,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   );
                 }
 
-                return GridView.builder(
+                return RefreshIndicator(
+                  onRefresh: _refreshLibrary,
+                  color: AppTheme.internationalOrange,
+                  backgroundColor: AppTheme.borderGray,
+                  child: GridView.builder(
             padding: const EdgeInsets.all(16),
             // Enable iOS ProMotion scroll physics
             physics: const BouncingScrollPhysics(
@@ -539,23 +568,24 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 ),
               );
             },
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(
-            color: AppTheme.internationalOrange,
           ),
-        ),
-        error: (error, stack) => Center(
-          child: Text(
-            'Error loading books',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppTheme.textSecondary,
+                );
+              },
+              loading: () => const Center(
+                child: CircularProgressIndicator(
+                  color: AppTheme.internationalOrange,
                 ),
+              ),
+              error: (error, stack) => Center(
+                child: Text(
+                  'Error loading books',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
-    ),
       ],
     );
   }
@@ -829,6 +859,89 @@ class _BookCardState extends ConsumerState<BookCard>
     }
   }
 
+  void _showContextMenu(BuildContext context) {
+    HapticFeedback.mediumImpact();
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoActionSheet(
+        actions: <CupertinoActionSheetAction>[
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (context) => BookDetailScreen(book: widget.book),
+                ),
+              );
+            },
+            child: const Text('View Details'),
+          ),
+          if (widget.book.reviewNeeded)
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(context);
+                final navigator = Navigator.of(context);
+                await navigator.push(
+                  CupertinoPageRoute(
+                    builder: (context) => EditBookScreen(book: widget.book),
+                  ),
+                );
+              },
+              child: const Text('Edit'),
+            ),
+          CupertinoActionSheetAction(
+            onPressed: () async {
+              Navigator.pop(context);
+              final database = ref.read(databaseProvider);
+              await database.deleteBooks([widget.book.isbn]);
+              HapticFeedback.mediumImpact();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Book deleted'),
+                    backgroundColor: AppTheme.borderGray,
+                  ),
+                );
+              }
+            },
+            isDestructiveAction: true,
+            child: const Text('Delete'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () async {
+              Navigator.pop(context);
+              // Share book metadata as text
+              final shareText = '${widget.book.title} by ${widget.book.author}\nISBN: ${widget.book.isbn}';
+              // We'll use the share_plus package
+              // Import needed at top of file
+              try {
+                await Share.share(shareText);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Share failed'),
+                      backgroundColor: AppTheme.borderGray,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Share'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectMode = ref.watch(selectModeProvider);
@@ -840,8 +953,9 @@ class _BookCardState extends ConsumerState<BookCard>
         if (selectMode) {
           ref.read(selectedBooksProvider.notifier).toggle(widget.book.isbn);
         } else {
+          HapticFeedback.lightImpact();
           Navigator.of(context).push(
-            MaterialPageRoute(
+            CupertinoPageRoute(
               builder: (context) => BookDetailScreen(book: widget.book),
             ),
           );
@@ -849,8 +963,7 @@ class _BookCardState extends ConsumerState<BookCard>
       },
       onLongPress: () {
         if (!selectMode) {
-          ref.read(selectModeProvider.notifier).enable();
-          ref.read(selectedBooksProvider.notifier).toggle(widget.book.isbn);
+          _showContextMenu(context);
         }
       },
       child: Container(
