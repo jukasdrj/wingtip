@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../data/database.dart';
 import 'library_provider.dart';
+import 'book_detail_bottom_sheet.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -236,34 +237,37 @@ class BookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: Colors.white,
-          width: 1,
+    return GestureDetector(
+      onTap: () => BookDetailBottomSheet.show(context, book),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Colors.white,
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(4),
         ),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(3),
-        child: AspectRatio(
-          aspectRatio: 1 / 1.5,
-          child: book.coverUrl != null && book.coverUrl!.isNotEmpty
-              ? CachedNetworkImage(
-                  imageUrl: book.coverUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: AppTheme.borderGray,
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: AppTheme.internationalOrange,
-                        strokeWidth: 2,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: AspectRatio(
+            aspectRatio: 1 / 1.5,
+            child: book.coverUrl != null && book.coverUrl!.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: book.coverUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: AppTheme.borderGray,
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.internationalOrange,
+                          strokeWidth: 2,
+                        ),
                       ),
                     ),
-                  ),
-                  errorWidget: (context, url, error) => _buildFallbackCard(),
-                )
-              : _buildFallbackCard(),
+                    errorWidget: (context, url, error) => _buildFallbackCard(),
+                  )
+                : _buildFallbackCard(),
+          ),
         ),
       ),
     );
