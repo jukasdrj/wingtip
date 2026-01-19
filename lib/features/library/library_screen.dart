@@ -96,6 +96,74 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ),
             ),
           ),
+          // Filter and Sort controls
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            child: Row(
+              children: [
+                // Needs Review Filter
+                Expanded(
+                  child: Consumer(
+                    builder: (context, ref, child) {
+                      final reviewFilter = ref.watch(reviewNeededFilterProvider);
+                      return OutlinedButton.icon(
+                        onPressed: () {
+                          ref.read(reviewNeededFilterProvider.notifier).toggleNeedsReview();
+                        },
+                        icon: Icon(
+                          reviewFilter == true ? Icons.filter_alt : Icons.filter_alt_outlined,
+                          size: 16,
+                        ),
+                        label: const Text('Needs Review'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: reviewFilter == true
+                              ? AppTheme.internationalOrange
+                              : AppTheme.textSecondary,
+                          side: BorderSide(
+                            color: reviewFilter == true
+                                ? AppTheme.internationalOrange
+                                : AppTheme.borderGray,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Review First Sort
+                Expanded(
+                  child: Consumer(
+                    builder: (context, ref, child) {
+                      final sortReviewFirst = ref.watch(sortReviewFirstProvider);
+                      return OutlinedButton.icon(
+                        onPressed: () {
+                          ref.read(sortReviewFirstProvider.notifier).toggle();
+                        },
+                        icon: Icon(
+                          sortReviewFirst ? Icons.sort : Icons.sort_outlined,
+                          size: 16,
+                        ),
+                        label: const Text('Review First'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: sortReviewFirst
+                              ? AppTheme.internationalOrange
+                              : AppTheme.textSecondary,
+                          side: BorderSide(
+                            color: sortReviewFirst
+                                ? AppTheme.internationalOrange
+                                : AppTheme.borderGray,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
           // Books grid
           Expanded(
             child: booksAsync.when(
@@ -251,22 +319,45 @@ class BookCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(3),
           child: AspectRatio(
             aspectRatio: 1 / 1.5,
-            child: book.coverUrl != null && book.coverUrl!.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: book.coverUrl!,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      color: AppTheme.borderGray,
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          color: AppTheme.internationalOrange,
-                          strokeWidth: 2,
+            child: Stack(
+              children: [
+                book.coverUrl != null && book.coverUrl!.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: book.coverUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: AppTheme.borderGray,
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: AppTheme.internationalOrange,
+                              strokeWidth: 2,
+                            ),
+                          ),
                         ),
+                        errorWidget: (context, url, error) => _buildFallbackCard(),
+                      )
+                    : _buildFallbackCard(),
+                // Review needed indicator
+                if (book.reviewNeeded)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFCC00), // Yellow
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.warning,
+                        size: 14,
+                        color: Colors.black,
                       ),
                     ),
-                    errorWidget: (context, url, error) => _buildFallbackCard(),
-                  )
-                : _buildFallbackCard(),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

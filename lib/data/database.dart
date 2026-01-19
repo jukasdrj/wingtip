@@ -16,6 +16,7 @@ class Books extends Table {
   TextColumn get format => text().nullable()();
   IntColumn get addedDate => integer()();
   RealColumn get spineConfidence => real().nullable()();
+  BoolColumn get reviewNeeded => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {isbn};
@@ -38,7 +39,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.test(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -129,25 +130,57 @@ class AppDatabase extends _$AppDatabase {
             END''',
           );
         }
+        if (from < 3) {
+          // Add review_needed column
+          await m.addColumn(books, books.reviewNeeded);
+        }
       },
     );
   }
 
   // Query all books ordered by added date descending
-  Stream<List<Book>> watchAllBooks() {
-    return (select(books)..orderBy([(t) => OrderingTerm.desc(t.addedDate)]))
-        .watch();
+  Stream<List<Book>> watchAllBooks({bool? reviewNeeded, bool sortReviewFirst = false}) {
+    final query = select(books);
+
+    if (reviewNeeded != null) {
+      query.where((t) => t.reviewNeeded.equals(reviewNeeded));
+    }
+
+    if (sortReviewFirst) {
+      query.orderBy([
+        (t) => OrderingTerm.desc(t.reviewNeeded),
+        (t) => OrderingTerm.desc(t.addedDate),
+      ]);
+    } else {
+      query.orderBy([(t) => OrderingTerm.desc(t.addedDate)]);
+    }
+
+    return query.watch();
   }
 
-  Future<List<Book>> getAllBooks() {
-    return (select(books)..orderBy([(t) => OrderingTerm.desc(t.addedDate)]))
-        .get();
+  Future<List<Book>> getAllBooks({bool? reviewNeeded, bool sortReviewFirst = false}) {
+    final query = select(books);
+
+    if (reviewNeeded != null) {
+      query.where((t) => t.reviewNeeded.equals(reviewNeeded));
+    }
+
+    if (sortReviewFirst) {
+      query.orderBy([
+        (t) => OrderingTerm.desc(t.reviewNeeded),
+        (t) => OrderingTerm.desc(t.addedDate),
+      ]);
+    } else {
+      query.orderBy([(t) => OrderingTerm.desc(t.addedDate)]);
+    }
+
+    return query.get();
   }
 
   // Search books using FTS5
-  Stream<List<Book>> searchBooks(String query) {
+  Stream<List<Book>> searchBooks(String query, {bool? reviewNeeded, bool sortReviewFirst = false}) {
     if (query.isEmpty) {
-      return watchAllBooks();
+      return watchAllBooks(reviewNeeded: reviewNeeded, sortReviewFirst: sortReviewFirst);
     }
 
     // Escape special FTS5 characters and prepare query
@@ -158,22 +191,37 @@ class AppDatabase extends _$AppDatabase {
         .replaceAll(':', '')
         .replaceAll('-', ' ');
 
+    // Build WHERE clause
+    final whereClause = reviewNeeded != null
+        ? 'WHERE books_fts MATCH ? AND b.review_needed = ?'
+        : 'WHERE books_fts MATCH ?';
+
+    // Build ORDER BY clause
+    final orderByClause = sortReviewFirst
+        ? 'ORDER BY b.review_needed DESC, b.added_date DESC'
+        : 'ORDER BY b.added_date DESC';
+
+    // Build variables list
+    final variables = reviewNeeded != null
+        ? [Variable.withString('$escapedQuery*'), Variable.withBool(reviewNeeded)]
+        : [Variable.withString('$escapedQuery*')];
+
     // Use FTS5 MATCH query with prefix matching
     return customSelect(
       '''SELECT b.* FROM books b
          INNER JOIN books_fts fts ON b.rowid = fts.rowid
-         WHERE books_fts MATCH ?
-         ORDER BY b.added_date DESC''',
-      variables: [Variable.withString('$escapedQuery*')],
+         $whereClause
+         $orderByClause''',
+      variables: variables,
       readsFrom: {books},
     ).watch().map((rows) {
       return rows.map((row) => books.map(row.data)).toList();
     });
   }
 
-  Future<List<Book>> searchBooksOnce(String query) {
+  Future<List<Book>> searchBooksOnce(String query, {bool? reviewNeeded, bool sortReviewFirst = false}) {
     if (query.isEmpty) {
-      return getAllBooks();
+      return getAllBooks(reviewNeeded: reviewNeeded, sortReviewFirst: sortReviewFirst);
     }
 
     final escapedQuery = query
@@ -182,12 +230,27 @@ class AppDatabase extends _$AppDatabase {
         .replaceAll(':', '')
         .replaceAll('-', ' ');
 
+    // Build WHERE clause
+    final whereClause = reviewNeeded != null
+        ? 'WHERE books_fts MATCH ? AND b.review_needed = ?'
+        : 'WHERE books_fts MATCH ?';
+
+    // Build ORDER BY clause
+    final orderByClause = sortReviewFirst
+        ? 'ORDER BY b.review_needed DESC, b.added_date DESC'
+        : 'ORDER BY b.added_date DESC';
+
+    // Build variables list
+    final variables = reviewNeeded != null
+        ? [Variable.withString('$escapedQuery*'), Variable.withBool(reviewNeeded)]
+        : [Variable.withString('$escapedQuery*')];
+
     return customSelect(
       '''SELECT b.* FROM books b
          INNER JOIN books_fts fts ON b.rowid = fts.rowid
-         WHERE books_fts MATCH ?
-         ORDER BY b.added_date DESC''',
-      variables: [Variable.withString('$escapedQuery*')],
+         $whereClause
+         $orderByClause''',
+      variables: variables,
       readsFrom: {books},
     ).map((row) => books.map(row.data)).get();
   }
