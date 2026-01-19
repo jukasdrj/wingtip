@@ -80,6 +80,9 @@ class JobStateNotifier extends Notifier<JobState> {
       if (e.toString().contains('RateLimitException')) {
         _handleRateLimitError(e);
       } else {
+        // Trigger error haptic feedback
+        HapticFeedback.heavyImpact();
+
         // Update the job to error state if it exists
         final jobs = state.jobs;
         if (jobs.isNotEmpty) {
@@ -99,6 +102,7 @@ class JobStateNotifier extends Notifier<JobState> {
   /// Handle rate limit error
   void _handleRateLimitError(dynamic error) {
     debugPrint('[JobStateNotifier] Rate limit hit: $error');
+    HapticFeedback.heavyImpact();
 
     // Extract retryAfterMs from error message
     int retryAfterMs = 60000; // Default 60 seconds
@@ -188,6 +192,7 @@ class JobStateNotifier extends Notifier<JobState> {
         },
         onError: (error) {
           debugPrint('[JobStateNotifier] SSE stream error for job $jobId: $error');
+          HapticFeedback.heavyImpact();
           final job = state.getJobById(jobId);
           if (job != null) {
             _updateJob(
@@ -206,6 +211,7 @@ class JobStateNotifier extends Notifier<JobState> {
       );
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to start SSE stream: $e');
+      HapticFeedback.heavyImpact();
       final job = state.getJobById(jobId);
       if (job != null) {
         _updateJob(
@@ -280,6 +286,7 @@ class JobStateNotifier extends Notifier<JobState> {
         // Job failed with error
         final errorMessage = event.data['message'] as String? ?? 'Unknown error';
         debugPrint('[JobStateNotifier] Job $jobId error: $errorMessage');
+        HapticFeedback.heavyImpact();
         _updateJob(
           jobId,
           job.copyWith(
