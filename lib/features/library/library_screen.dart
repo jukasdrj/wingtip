@@ -9,7 +9,7 @@ import '../../data/database_provider.dart';
 import '../../data/failed_scans_repository.dart';
 import '../../features/talaria/job_state_provider.dart';
 import 'library_provider.dart';
-import 'book_detail_bottom_sheet.dart';
+import 'book_detail_screen.dart';
 import 'widgets/empty_library_state.dart';
 import 'widgets/failed_scan_card.dart' as failed_card;
 
@@ -749,7 +749,11 @@ class BookCard extends ConsumerWidget {
         if (selectMode) {
           ref.read(selectedBooksProvider.notifier).toggle(book.isbn);
         } else {
-          BookDetailBottomSheet.show(context, book);
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => BookDetailScreen(book: book),
+            ),
+          );
         }
       },
       onLongPress: () {
@@ -772,22 +776,25 @@ class BookCard extends ConsumerWidget {
             aspectRatio: 1 / 1.5,
             child: Stack(
               children: [
-                book.coverUrl != null && book.coverUrl!.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: book.coverUrl!,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: AppTheme.borderGray,
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              color: AppTheme.internationalOrange,
-                              strokeWidth: 2,
+                Hero(
+                  tag: 'book-cover-${book.isbn}',
+                  child: book.coverUrl != null && book.coverUrl!.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: book.coverUrl!,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: AppTheme.borderGray,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.internationalOrange,
+                                strokeWidth: 2,
+                              ),
                             ),
                           ),
-                        ),
-                        errorWidget: (context, url, error) => _buildFallbackCard(),
-                      )
-                    : _buildFallbackCard(),
+                          errorWidget: (context, url, error) => _buildFallbackCard(),
+                        )
+                      : _buildFallbackCard(),
+                ),
                 // Review needed indicator
                 if (book.reviewNeeded && !selectMode)
                   Positioned(

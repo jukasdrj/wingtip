@@ -92,6 +92,17 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _spineImagePathMeta = const VerificationMeta(
+    'spineImagePath',
+  );
+  @override
+  late final GeneratedColumn<String> spineImagePath = GeneratedColumn<String>(
+    'spine_image_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     isbn,
@@ -102,6 +113,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     addedDate,
     spineConfidence,
     reviewNeeded,
+    spineImagePath,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -177,6 +189,15 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         ),
       );
     }
+    if (data.containsKey('spine_image_path')) {
+      context.handle(
+        _spineImagePathMeta,
+        spineImagePath.isAcceptableOrUnknown(
+          data['spine_image_path']!,
+          _spineImagePathMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -218,6 +239,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.bool,
         data['${effectivePrefix}review_needed'],
       )!,
+      spineImagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}spine_image_path'],
+      ),
     );
   }
 
@@ -236,6 +261,7 @@ class Book extends DataClass implements Insertable<Book> {
   final int addedDate;
   final double? spineConfidence;
   final bool reviewNeeded;
+  final String? spineImagePath;
   const Book({
     required this.isbn,
     required this.title,
@@ -245,6 +271,7 @@ class Book extends DataClass implements Insertable<Book> {
     required this.addedDate,
     this.spineConfidence,
     required this.reviewNeeded,
+    this.spineImagePath,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -263,6 +290,9 @@ class Book extends DataClass implements Insertable<Book> {
       map['spine_confidence'] = Variable<double>(spineConfidence);
     }
     map['review_needed'] = Variable<bool>(reviewNeeded);
+    if (!nullToAbsent || spineImagePath != null) {
+      map['spine_image_path'] = Variable<String>(spineImagePath);
+    }
     return map;
   }
 
@@ -282,6 +312,9 @@ class Book extends DataClass implements Insertable<Book> {
           ? const Value.absent()
           : Value(spineConfidence),
       reviewNeeded: Value(reviewNeeded),
+      spineImagePath: spineImagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(spineImagePath),
     );
   }
 
@@ -299,6 +332,7 @@ class Book extends DataClass implements Insertable<Book> {
       addedDate: serializer.fromJson<int>(json['addedDate']),
       spineConfidence: serializer.fromJson<double?>(json['spineConfidence']),
       reviewNeeded: serializer.fromJson<bool>(json['reviewNeeded']),
+      spineImagePath: serializer.fromJson<String?>(json['spineImagePath']),
     );
   }
   @override
@@ -313,6 +347,7 @@ class Book extends DataClass implements Insertable<Book> {
       'addedDate': serializer.toJson<int>(addedDate),
       'spineConfidence': serializer.toJson<double?>(spineConfidence),
       'reviewNeeded': serializer.toJson<bool>(reviewNeeded),
+      'spineImagePath': serializer.toJson<String?>(spineImagePath),
     };
   }
 
@@ -325,6 +360,7 @@ class Book extends DataClass implements Insertable<Book> {
     int? addedDate,
     Value<double?> spineConfidence = const Value.absent(),
     bool? reviewNeeded,
+    Value<String?> spineImagePath = const Value.absent(),
   }) => Book(
     isbn: isbn ?? this.isbn,
     title: title ?? this.title,
@@ -336,6 +372,9 @@ class Book extends DataClass implements Insertable<Book> {
         ? spineConfidence.value
         : this.spineConfidence,
     reviewNeeded: reviewNeeded ?? this.reviewNeeded,
+    spineImagePath: spineImagePath.present
+        ? spineImagePath.value
+        : this.spineImagePath,
   );
   Book copyWithCompanion(BooksCompanion data) {
     return Book(
@@ -351,6 +390,9 @@ class Book extends DataClass implements Insertable<Book> {
       reviewNeeded: data.reviewNeeded.present
           ? data.reviewNeeded.value
           : this.reviewNeeded,
+      spineImagePath: data.spineImagePath.present
+          ? data.spineImagePath.value
+          : this.spineImagePath,
     );
   }
 
@@ -364,7 +406,8 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('format: $format, ')
           ..write('addedDate: $addedDate, ')
           ..write('spineConfidence: $spineConfidence, ')
-          ..write('reviewNeeded: $reviewNeeded')
+          ..write('reviewNeeded: $reviewNeeded, ')
+          ..write('spineImagePath: $spineImagePath')
           ..write(')'))
         .toString();
   }
@@ -379,6 +422,7 @@ class Book extends DataClass implements Insertable<Book> {
     addedDate,
     spineConfidence,
     reviewNeeded,
+    spineImagePath,
   );
   @override
   bool operator ==(Object other) =>
@@ -391,7 +435,8 @@ class Book extends DataClass implements Insertable<Book> {
           other.format == this.format &&
           other.addedDate == this.addedDate &&
           other.spineConfidence == this.spineConfidence &&
-          other.reviewNeeded == this.reviewNeeded);
+          other.reviewNeeded == this.reviewNeeded &&
+          other.spineImagePath == this.spineImagePath);
 }
 
 class BooksCompanion extends UpdateCompanion<Book> {
@@ -403,6 +448,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<int> addedDate;
   final Value<double?> spineConfidence;
   final Value<bool> reviewNeeded;
+  final Value<String?> spineImagePath;
   final Value<int> rowid;
   const BooksCompanion({
     this.isbn = const Value.absent(),
@@ -413,6 +459,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.addedDate = const Value.absent(),
     this.spineConfidence = const Value.absent(),
     this.reviewNeeded = const Value.absent(),
+    this.spineImagePath = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   BooksCompanion.insert({
@@ -424,6 +471,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     required int addedDate,
     this.spineConfidence = const Value.absent(),
     this.reviewNeeded = const Value.absent(),
+    this.spineImagePath = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : isbn = Value(isbn),
        title = Value(title),
@@ -438,6 +486,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<int>? addedDate,
     Expression<double>? spineConfidence,
     Expression<bool>? reviewNeeded,
+    Expression<String>? spineImagePath,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -449,6 +498,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (addedDate != null) 'added_date': addedDate,
       if (spineConfidence != null) 'spine_confidence': spineConfidence,
       if (reviewNeeded != null) 'review_needed': reviewNeeded,
+      if (spineImagePath != null) 'spine_image_path': spineImagePath,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -462,6 +512,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<int>? addedDate,
     Value<double?>? spineConfidence,
     Value<bool>? reviewNeeded,
+    Value<String?>? spineImagePath,
     Value<int>? rowid,
   }) {
     return BooksCompanion(
@@ -473,6 +524,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       addedDate: addedDate ?? this.addedDate,
       spineConfidence: spineConfidence ?? this.spineConfidence,
       reviewNeeded: reviewNeeded ?? this.reviewNeeded,
+      spineImagePath: spineImagePath ?? this.spineImagePath,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -504,6 +556,9 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (reviewNeeded.present) {
       map['review_needed'] = Variable<bool>(reviewNeeded.value);
     }
+    if (spineImagePath.present) {
+      map['spine_image_path'] = Variable<String>(spineImagePath.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -521,6 +576,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('addedDate: $addedDate, ')
           ..write('spineConfidence: $spineConfidence, ')
           ..write('reviewNeeded: $reviewNeeded, ')
+          ..write('spineImagePath: $spineImagePath, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1015,6 +1071,7 @@ typedef $$BooksTableCreateCompanionBuilder =
       required int addedDate,
       Value<double?> spineConfidence,
       Value<bool> reviewNeeded,
+      Value<String?> spineImagePath,
       Value<int> rowid,
     });
 typedef $$BooksTableUpdateCompanionBuilder =
@@ -1027,6 +1084,7 @@ typedef $$BooksTableUpdateCompanionBuilder =
       Value<int> addedDate,
       Value<double?> spineConfidence,
       Value<bool> reviewNeeded,
+      Value<String?> spineImagePath,
       Value<int> rowid,
     });
 
@@ -1075,6 +1133,11 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
 
   ColumnFilters<bool> get reviewNeeded => $composableBuilder(
     column: $table.reviewNeeded,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get spineImagePath => $composableBuilder(
+    column: $table.spineImagePath,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1127,6 +1190,11 @@ class $$BooksTableOrderingComposer
     column: $table.reviewNeeded,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get spineImagePath => $composableBuilder(
+    column: $table.spineImagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$BooksTableAnnotationComposer
@@ -1163,6 +1231,11 @@ class $$BooksTableAnnotationComposer
 
   GeneratedColumn<bool> get reviewNeeded => $composableBuilder(
     column: $table.reviewNeeded,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get spineImagePath => $composableBuilder(
+    column: $table.spineImagePath,
     builder: (column) => column,
   );
 }
@@ -1203,6 +1276,7 @@ class $$BooksTableTableManager
                 Value<int> addedDate = const Value.absent(),
                 Value<double?> spineConfidence = const Value.absent(),
                 Value<bool> reviewNeeded = const Value.absent(),
+                Value<String?> spineImagePath = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BooksCompanion(
                 isbn: isbn,
@@ -1213,6 +1287,7 @@ class $$BooksTableTableManager
                 addedDate: addedDate,
                 spineConfidence: spineConfidence,
                 reviewNeeded: reviewNeeded,
+                spineImagePath: spineImagePath,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1225,6 +1300,7 @@ class $$BooksTableTableManager
                 required int addedDate,
                 Value<double?> spineConfidence = const Value.absent(),
                 Value<bool> reviewNeeded = const Value.absent(),
+                Value<String?> spineImagePath = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BooksCompanion.insert(
                 isbn: isbn,
@@ -1235,6 +1311,7 @@ class $$BooksTableTableManager
                 addedDate: addedDate,
                 spineConfidence: spineConfidence,
                 reviewNeeded: reviewNeeded,
+                spineImagePath: spineImagePath,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

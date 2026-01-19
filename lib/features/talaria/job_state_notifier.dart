@@ -717,6 +717,10 @@ class JobStateNotifier extends Notifier<JobState> {
         return;
       }
 
+      // Get the image path from the job
+      final job = state.getJobByJobId(serverJobId);
+      final spineImagePath = job?.imagePath;
+
       // Create book companion for insert
       final book = BooksCompanion.insert(
         isbn: isbn,
@@ -731,6 +735,9 @@ class JobStateNotifier extends Notifier<JobState> {
         addedDate: DateTime.now().millisecondsSinceEpoch,
         spineConfidence: spineConfidence != null
             ? Value(spineConfidence.toDouble())
+            : const Value.absent(),
+        spineImagePath: spineImagePath != null && spineImagePath.isNotEmpty
+            ? Value(spineImagePath)
             : const Value.absent(),
       );
 

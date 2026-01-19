@@ -17,6 +17,7 @@ class Books extends Table {
   IntColumn get addedDate => integer()();
   RealColumn get spineConfidence => real().nullable()();
   BoolColumn get reviewNeeded => boolean().withDefault(const Constant(false))();
+  TextColumn get spineImagePath => text().nullable()(); // Path to original captured spine image
 
   @override
   Set<Column> get primaryKey => {isbn};
@@ -67,7 +68,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.test(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -165,6 +166,10 @@ class AppDatabase extends _$AppDatabase {
         if (from < 4) {
           // Add failure_reason column to failed_scans
           await m.addColumn(failedScans, failedScans.failureReason);
+        }
+        if (from < 5) {
+          // Add spine_image_path column to books
+          await m.addColumn(books, books.spineImagePath);
         }
       },
     );
