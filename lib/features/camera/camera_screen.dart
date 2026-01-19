@@ -13,6 +13,7 @@ import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/features/talaria/processing_stack_widget.dart';
 import 'package:wingtip/features/talaria/job_state_provider.dart';
 import 'package:wingtip/features/library/library_screen.dart';
+import 'package:wingtip/features/camera/stream_overlay.dart';
 import 'package:wingtip/widgets/error_snack_bar.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
@@ -243,6 +244,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   @override
   Widget build(BuildContext context) {
     final cameraService = ref.watch(cameraServiceProvider);
+    final jobState = ref.watch(jobStateProvider);
+
+    // Get the active job's progress message
+    final activeJob = jobState.activeJobs.isNotEmpty ? jobState.activeJobs.first : null;
+    final streamMessage = activeJob?.progressMessage;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -257,6 +263,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             if (_showFocusIndicator && _focusPoint != null)
               _buildFocusIndicator(),
           ],
+          StreamOverlay(
+            message: streamMessage,
+            onDismiss: () {
+              // Message dismissed by user - no action needed
+              // Auto-dismissal is handled by the overlay itself
+            },
+          ),
           _buildSessionCounter(),
           _buildLibraryButton(context),
           _buildRateLimitOverlay(),
