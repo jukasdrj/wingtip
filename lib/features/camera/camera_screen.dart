@@ -1,18 +1,55 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
 
-class CameraScreen extends ConsumerWidget {
+class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CameraScreen> createState() => _CameraScreenState();
+}
+
+class _CameraScreenState extends ConsumerState<CameraScreen> {
+  bool _showFlash = false;
+
+  Future<void> _onShutterTap() async {
+    // Trigger haptic feedback immediately
+    HapticFeedback.lightImpact();
+
+    // Show flash overlay
+    setState(() {
+      _showFlash = true;
+    });
+
+    // Hide flash after 100ms
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        setState(() {
+          _showFlash = false;
+        });
+      }
+    });
+
+    // TODO: Add actual image capture logic here
+    // This will be implemented in a future story
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final cameraService = ref.watch(cameraServiceProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: _buildBody(cameraService),
+      body: Stack(
+        children: [
+          _buildBody(cameraService),
+          if (_showFlash) _buildFlashOverlay(),
+          if (cameraService.isInitialized && cameraService.controller != null)
+            _buildShutterButton(),
+        ],
+      ),
     );
   }
 
@@ -39,5 +76,41 @@ class CameraScreen extends ConsumerWidget {
     }
 
     return CameraPreview(cameraService.controller!);
+  }
+
+  Widget _buildFlashOverlay() {
+    return AnimatedOpacity(
+      opacity: _showFlash ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 100),
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildShutterButton() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 40,
+      child: Center(
+        child: GestureDetector(
+          onTap: _onShutterTap,
+          child: Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white,
+                width: 4,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
