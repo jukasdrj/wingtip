@@ -1,0 +1,156 @@
+import 'package:drift/drift.dart' hide isNull;
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:wingtip/data/database.dart';
+
+void main() {
+  late AppDatabase database;
+
+  setUp(() {
+    database = AppDatabase.test(NativeDatabase.memory());
+  });
+
+  tearDown(() async {
+    await database.close();
+  });
+
+  group('Books table', () {
+    test('should insert and retrieve a book', () async {
+      final book = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Test Book'),
+        author: const Value('Test Author'),
+        coverUrl: const Value('https://example.com/cover.jpg'),
+        format: const Value('Hardcover'),
+        addedDate: Value(DateTime.now().millisecondsSinceEpoch),
+        spineConfidence: const Value(0.95),
+      );
+
+      await database.into(database.books).insert(book);
+
+      final books = await database.select(database.books).get();
+      expect(books.length, 1);
+      expect(books.first.isbn, '978-0-123456-78-9');
+      expect(books.first.title, 'Test Book');
+      expect(books.first.author, 'Test Author');
+      expect(books.first.spineConfidence, 0.95);
+    });
+
+    test('should enforce primary key constraint on isbn', () async {
+      final book1 = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Test Book 1'),
+        author: const Value('Test Author'),
+        addedDate: Value(DateTime.now().millisecondsSinceEpoch),
+      );
+
+      final book2 = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Test Book 2'),
+        author: const Value('Another Author'),
+        addedDate: Value(DateTime.now().millisecondsSinceEpoch),
+      );
+
+      await database.into(database.books).insert(book1);
+
+      expect(
+        () => database.into(database.books).insert(book2),
+        throwsA(isA<SqliteException>()),
+      );
+    });
+
+    test('should handle nullable fields', () async {
+      final book = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Test Book'),
+        author: const Value('Test Author'),
+        addedDate: Value(DateTime.now().millisecondsSinceEpoch),
+      );
+
+      await database.into(database.books).insert(book);
+
+      final books = await database.select(database.books).get();
+      expect(books.first.coverUrl, isNull);
+      expect(books.first.format, isNull);
+      expect(books.first.spineConfidence, isNull);
+    });
+
+    test('should sort by addedDate descending using index', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      final book1 = BooksCompanion(
+        isbn: const Value('978-0-111111-11-1'),
+        title: const Value('Older Book'),
+        author: const Value('Author 1'),
+        addedDate: Value(now - 86400000), // 1 day ago
+      );
+
+      final book2 = BooksCompanion(
+        isbn: const Value('978-0-222222-22-2'),
+        title: const Value('Newer Book'),
+        author: const Value('Author 2'),
+        addedDate: Value(now),
+      );
+
+      await database.into(database.books).insert(book1);
+      await database.into(database.books).insert(book2);
+
+      final books = await (database.select(database.books)
+            ..orderBy([(t) => OrderingTerm.desc(t.addedDate)]))
+          .get();
+
+      expect(books.length, 2);
+      expect(books.first.title, 'Newer Book');
+      expect(books.last.title, 'Older Book');
+    });
+  });
+
+  group('FailedScans table', () {
+    test('should insert and retrieve a failed scan', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final failedScan = FailedScansCompanion(
+        jobId: const Value('job-123'),
+        imagePath: const Value('/path/to/image.jpg'),
+        errorMessage: const Value('OCR failed'),
+        createdAt: Value(now),
+        expiresAt: Value(now + 86400000), // 1 day later
+      );
+
+      await database.into(database.failedScans).insert(failedScan);
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+      expect(scans.first.jobId, 'job-123');
+      expect(scans.first.imagePath, '/path/to/image.jpg');
+      expect(scans.first.errorMessage, 'OCR failed');
+    });
+
+    test('should auto-increment id', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final scan1 = FailedScansCompanion(
+        jobId: const Value('job-1'),
+        imagePath: const Value('/path/1.jpg'),
+        errorMessage: const Value('Error 1'),
+        createdAt: Value(now),
+        expiresAt: Value(now + 86400000),
+      );
+
+      final scan2 = FailedScansCompanion(
+        jobId: const Value('job-2'),
+        imagePath: const Value('/path/2.jpg'),
+        errorMessage: const Value('Error 2'),
+        createdAt: Value(now),
+        expiresAt: Value(now + 86400000),
+      );
+
+      await database.into(database.failedScans).insert(scan1);
+      await database.into(database.failedScans).insert(scan2);
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 2);
+      expect(scans.first.id, 1);
+      expect(scans.last.id, 2);
+    });
+  });
+}
+
