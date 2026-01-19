@@ -10,6 +10,7 @@ import 'package:wingtip/features/camera/camera_service.dart';
 import 'package:wingtip/features/camera/permission_primer_screen.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:wingtip/services/failed_scans_cleanup_service_provider.dart';
+import 'package:wingtip/widgets/network_reconnect_listener.dart';
 
 void main() async {
   // Preserve the splash screen
@@ -108,13 +109,15 @@ class _MyAppState extends State<MyApp> {
           WidgetsBinding.instance.addObserver(_lifecycleObserver!);
         }
 
-        return MaterialApp(
-          title: 'Wingtip',
-          // Lock to dark theme with Swiss Utility styling
-          theme: AppTheme.darkTheme,
-          themeMode: ThemeMode.dark,
-          // Show permission primer if not granted, otherwise camera screen
-          home: widget.hasPermission ? const CameraScreen() : const PermissionPrimerScreen(),
+        return NetworkReconnectListener(
+          child: MaterialApp(
+            title: 'Wingtip',
+            // Lock to dark theme with Swiss Utility styling
+            theme: AppTheme.darkTheme,
+            themeMode: ThemeMode.dark,
+            // Show permission primer if not granted, otherwise camera screen
+            home: widget.hasPermission ? const CameraScreen() : const PermissionPrimerScreen(),
+          ),
         );
       },
     );

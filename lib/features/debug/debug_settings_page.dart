@@ -11,6 +11,7 @@ import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/data/failed_scans_repository.dart';
 import 'package:wingtip/services/csv_export_service_provider.dart';
 import 'package:wingtip/services/failed_scan_retention_service.dart';
+import 'package:wingtip/services/network_reconnect_service.dart';
 import 'package:wingtip/widgets/error_snack_bar.dart';
 
 /// Debug settings page with options to view and regenerate the device ID.
@@ -108,6 +109,15 @@ class DebugSettingsPage extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             const _FailedScanRetentionSection(),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Network Reconnection',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            const _NetworkReconnectSection(),
             const SizedBox(height: 32),
             const Divider(),
             const SizedBox(height: 16),
@@ -510,6 +520,57 @@ class _FailedScanRetentionSectionState
                 label: Text(
                     _isClearing ? 'Clearing...' : 'Clear All Failed Scans Now'),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NetworkReconnectSection extends ConsumerWidget {
+  const _NetworkReconnectSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final autoRetry = ref.watch(autoRetryProvider);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Auto-retry on reconnect',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Automatically retry failed scans when connection is restored',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: autoRetry,
+                  onChanged: (value) async {
+                    HapticFeedback.lightImpact();
+                    await ref.read(autoRetryProvider.notifier).setAutoRetry(value);
+                  },
+                  activeTrackColor: AppTheme.internationalOrange,
+                ),
+              ],
             ),
           ],
         ),
