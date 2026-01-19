@@ -146,3 +146,12 @@ no errors  \n✅ Committed with proper message  \n\n### Technical Details:\n- Fi
 (lib/features/library/library_provider.dart:121-155)\n- Updated `booksProvider` to check for selected collection\n- When collection is selected, shows only books in that collection\n- Otherwise shows all books with existing search/filter/sort functionality\n\n### Quality\n- ✅ flutter analyze shows no errors\n- ✅ Follows Swiss Utility design with OLED black backgrounds and 1px borders\n- ✅ iOS-first haptic feedback at all interaction stages\n- ✅ Uses Riverpod 3.x Notifier pattern consistently\n\n
 
 ---
+## ✓ Iteration 16 - US-168: Book Statistics Dashboard
+*2026-01-19T16:56:52.523Z (278s)*
+
+**Status:** Completed
+
+**Notes:**
+ey metrics: Total Books, Books This Week/Month, Scan Streak\n- ✅ Show top authors and formats as simple bar charts\n- ✅ Calculate and display average books per scanning session\n- ✅ Use Swiss Utility design: monospace numbers, minimal charts with 1px borders\n- ✅ Query metrics from Drift database with efficient aggregations\n- ✅ flutter analyze shows no errors\n- ✅ Manual verification: Stats accurately reflect library data\n\n**Commit:** `368995a` - `feat: US-168 - Book Statistics Dashboard`\n\n
+
+---

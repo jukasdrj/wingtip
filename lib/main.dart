@@ -12,6 +12,7 @@ import 'package:wingtip/core/restart_widget.dart';
 import 'package:wingtip/features/camera/camera_screen.dart';
 import 'package:wingtip/features/camera/camera_service.dart';
 import 'package:wingtip/features/camera/permission_primer_screen.dart';
+import 'package:wingtip/features/onboarding/onboarding_screen.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:wingtip/services/failed_scans_cleanup_service_provider.dart';
 import 'package:wingtip/widgets/network_reconnect_listener.dart';
@@ -31,7 +32,9 @@ void main() async {
   // Create provider container (deferred provider initialization)
   final container = ProviderContainer();
 
-  // Check camera permission status (fast system call)
+  // Check onboarding completion and camera permission status
+  final prefs = await SharedPreferences.getInstance();
+  final onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
   final cameraPermissionStatus = await Permission.camera.status;
 
   // Optimization: Start all async operations in parallel
@@ -87,7 +90,10 @@ void main() async {
     RestartWidget(
       child: UncontrolledProviderScope(
         container: container,
-        child: MyApp(hasPermission: cameraPermissionStatus.isGranted),
+        child: MyApp(
+          onboardingCompleted: onboardingCompleted,
+          hasPermission: cameraPermissionStatus.isGranted,
+        ),
       ),
     ),
   );
@@ -118,9 +124,14 @@ void _deferredCleanup(ProviderContainer container) {
 }
 
 class MyApp extends StatefulWidget {
+  final bool onboardingCompleted;
   final bool hasPermission;
 
-  const MyApp({super.key, required this.hasPermission});
+  const MyApp({
+    super.key,
+    required this.onboardingCompleted,
+    required this.hasPermission,
+  });
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -161,12 +172,27 @@ class _MyAppState extends State<MyApp> {
             themeMode: ThemeMode.dark,
             // Enable performance overlay for ProMotion profiling
             showPerformanceOverlay: showPerformanceOverlay,
-            // Show permission primer if not granted, otherwise camera screen
-            home: widget.hasPermission ? const CameraScreen() : const PermissionPrimerScreen(),
+            // Route logic: Onboarding → Permission → Camera
+            home: _determineHomeScreen(),
           ),
         );
       },
     );
+  }
+
+  Widget _determineHomeScreen() {
+    // If onboarding not completed, show onboarding first
+    if (!widget.onboardingCompleted) {
+      return const OnboardingScreen();
+    }
+
+    // If onboarding completed but no camera permission, show permission primer
+    if (!widget.hasPermission) {
+      return const PermissionPrimerScreen();
+    }
+
+    // If onboarding completed and permission granted, show camera screen
+    return const CameraScreen();
   }
 
   @override

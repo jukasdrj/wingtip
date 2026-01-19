@@ -16,7 +16,10 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(
       const ProviderScope(
-        child: MyApp(hasPermission: true),
+        child: MyApp(
+          onboardingCompleted: true,
+          hasPermission: true,
+        ),
       ),
     );
 
