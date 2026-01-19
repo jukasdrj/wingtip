@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../data/database.dart';
+import '../../data/database_provider.dart';
 import 'library_provider.dart';
 import 'book_detail_bottom_sheet.dart';
 
@@ -35,16 +36,85 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     ref.read(searchQueryProvider.notifier).setQuery(_searchController.text);
   }
 
+  Future<void> _showDeleteConfirmation(BuildContext context, int count) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.borderGray,
+        title: Text(
+          'Delete $count ${count == 1 ? 'book' : 'books'}?',
+          style: const TextStyle(color: AppTheme.textPrimary),
+        ),
+        content: Text(
+          'This action cannot be undone.',
+          style: const TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppTheme.internationalOrange),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final selectedBooks = ref.read(selectedBooksProvider);
+      final database = ref.read(databaseProvider);
+
+      await database.deleteBooks(selectedBooks.toList());
+
+      ref.read(selectModeProvider.notifier).disable();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleted $count ${count == 1 ? 'book' : 'books'}'),
+            backgroundColor: AppTheme.borderGray,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final booksAsync = ref.watch(booksProvider);
+    final selectMode = ref.watch(selectModeProvider);
+    final selectedBooks = ref.watch(selectedBooksProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.oledBlack,
       appBar: AppBar(
-        title: const Text('Library'),
+        title: Text(selectMode ? '${selectedBooks.length} selected' : 'Library'),
         backgroundColor: AppTheme.oledBlack,
         elevation: 0,
+        leading: selectMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  ref.read(selectModeProvider.notifier).disable();
+                },
+              )
+            : null,
+        actions: selectMode && selectedBooks.isNotEmpty
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () => _showDeleteConfirmation(context, selectedBooks.length),
+                ),
+              ]
+            : null,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(
@@ -298,20 +368,36 @@ class _AnimatedBookCardState extends State<AnimatedBookCard>
   }
 }
 
-class BookCard extends StatelessWidget {
+class BookCard extends ConsumerWidget {
   final Book book;
 
   const BookCard({super.key, required this.book});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectMode = ref.watch(selectModeProvider);
+    final selectedBooks = ref.watch(selectedBooksProvider);
+    final isSelected = selectedBooks.contains(book.isbn);
+
     return GestureDetector(
-      onTap: () => BookDetailBottomSheet.show(context, book),
+      onTap: () {
+        if (selectMode) {
+          ref.read(selectedBooksProvider.notifier).toggle(book.isbn);
+        } else {
+          BookDetailBottomSheet.show(context, book);
+        }
+      },
+      onLongPress: () {
+        if (!selectMode) {
+          ref.read(selectModeProvider.notifier).enable();
+          ref.read(selectedBooksProvider.notifier).toggle(book.isbn);
+        }
+      },
       child: Container(
         decoration: BoxDecoration(
           border: Border.all(
-            color: Colors.white,
-            width: 1,
+            color: selectMode && isSelected ? AppTheme.internationalOrange : Colors.white,
+            width: selectMode && isSelected ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(4),
         ),
@@ -338,7 +424,7 @@ class BookCard extends StatelessWidget {
                       )
                     : _buildFallbackCard(),
                 // Review needed indicator
-                if (book.reviewNeeded)
+                if (book.reviewNeeded && !selectMode)
                   Positioned(
                     top: 4,
                     right: 4,
@@ -354,6 +440,31 @@ class BookCard extends StatelessWidget {
                         size: 14,
                         color: Colors.black,
                       ),
+                    ),
+                  ),
+                // Checkbox in select mode
+                if (selectMode)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppTheme.internationalOrange : AppTheme.borderGray,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 2,
+                        ),
+                      ),
+                      child: isSelected
+                          ? const Icon(
+                              Icons.check,
+                              size: 16,
+                              color: Colors.white,
+                            )
+                          : null,
                     ),
                   ),
               ],

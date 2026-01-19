@@ -254,6 +254,13 @@ class AppDatabase extends _$AppDatabase {
       readsFrom: {books},
     ).map((row) => books.map(row.data)).get();
   }
+
+  // Delete multiple books by ISBN
+  Future<int> deleteBooks(List<String> isbns) async {
+    if (isbns.isEmpty) return 0;
+
+    return (delete(books)..where((t) => t.isbn.isIn(isbns))).go();
+  }
 }
 
 LazyDatabase _openConnection() {

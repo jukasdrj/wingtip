@@ -70,3 +70,56 @@ final booksProvider = StreamProvider<List<Book>>((ref) {
 final allBooksProvider = StreamProvider<List<Book>>((ref) {
   return ref.watch(booksProvider.future).asStream().asyncExpand((books) => Stream.value(books));
 });
+
+// Select mode notifier
+class SelectModeNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void enable() {
+    state = true;
+  }
+
+  void disable() {
+    state = false;
+    // Clear selected books when exiting select mode
+    ref.read(selectedBooksProvider.notifier).clear();
+  }
+
+  void toggle() {
+    state = !state;
+    if (!state) {
+      ref.read(selectedBooksProvider.notifier).clear();
+    }
+  }
+}
+
+final selectModeProvider = NotifierProvider<SelectModeNotifier, bool>(
+  SelectModeNotifier.new,
+);
+
+// Selected books notifier
+class SelectedBooksNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => {};
+
+  void toggle(String isbn) {
+    if (state.contains(isbn)) {
+      state = {...state}..remove(isbn);
+    } else {
+      state = {...state, isbn};
+    }
+  }
+
+  void clear() {
+    state = {};
+  }
+
+  void selectAll(List<String> isbns) {
+    state = {...isbns};
+  }
+}
+
+final selectedBooksProvider = NotifierProvider<SelectedBooksNotifier, Set<String>>(
+  SelectedBooksNotifier.new,
+);
