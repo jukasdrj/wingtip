@@ -1,14 +1,15 @@
 {
   "id": "0c56896e-97b3-41cb-8cc8-313aee453156",
-  "status": "running",
+  "status": "completed",
   "startedAt": "2026-01-19T01:25:23.075Z",
-  "updatedAt": "2026-01-19T02:04:49.192Z",
+  "updatedAt": "2026-01-19T03:52:00.000Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
   "prdPath": "tasks/prd.json",
-  "currentIteration": 11,
+  "currentIteration": 17,
   "maxIterations": 25,
   "totalTasks": 0,
-  "tasksCompleted": 11,
-  "cwd": "/Users/juju/dev_repos/wingtip"
+  "tasksCompleted": 17,
+  "cwd": "/Users/juju/dev_repos/wingtip",
+  "endedAt": "2026-01-19T03:52:00.000Z"
 }

@@ -514,11 +514,12 @@
         "Manual verification: CSV export contains all book data correctly formatted"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-116"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-124",
@@ -534,11 +535,12 @@
         "Manual verification: Multi-select and delete flow works smoothly"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-117"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-126",
@@ -553,11 +555,12 @@
         "Manual verification: Cache size updates and images re-download after clear"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-117"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-127",
@@ -572,11 +575,12 @@
         "Manual verification: Icon and splash screen display correctly on both platforms"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-102"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-129",
@@ -591,11 +595,12 @@
         "Manual verification: Empty state displays on fresh install"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-117"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-123",
@@ -610,14 +615,15 @@
         "Manual verification: JSON toggle works and displays valid JSON"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-122"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     }
   ],
   "metadata": {
-    "updatedAt": "2026-01-19T02:04:50.194Z"
+    "updatedAt": "2026-01-19T02:26:01.823Z"
   }
 }
