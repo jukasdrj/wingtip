@@ -1,0 +1,84 @@
+# iOS Optimization Configuration for Wingtip
+# Customized for camera-first, Swiss Utility design Flutter app
+
+project_name: "Wingtip"
+min_ios_version: "15.0"
+
+# Primary focus areas for Wingtip
+focus_areas:
+  - camera          # Critical: camera is core UX
+  - promotion       # Target: 120fps on iPhone 13 Pro+
+  - haptics         # Swiss Utility: haptic feedback is key
+  - widgets         # Performance: const constructors everywhere
+  - navigation      # iOS-native: Cupertino patterns
+
+# Wingtip-specific performance targets
+targets:
+  cold_start_ms: 1000      # PRD requirement: < 1.0s to camera
+  camera_init_ms: 500      # PRD requirement: < 500ms processing
+  target_fps: 120          # ProMotion displays
+  max_widget_depth: 10     # Keep widget trees shallow
+  max_rebuild_count: 50    # Aggressive: minimize rebuilds
+
+# Exclude generated and test files
+exclude_patterns:
+  - "**/*.g.dart"          # Drift generated
+  - "**/*.freezed.dart"    # Freezed (if used later)
+  - "**/test/**"           # Test files
+  - "**/build/**"          # Build output
+  - "**/.ralph-tui/**"     # Ralph TUI artifacts
+
+# Camera settings (core feature)
+camera_settings:
+  max_preview_width: 1920          # PRD: resize to max 1920px
+  max_preview_height: 1920
+  check_background_pause: true     # PRD: pause on background
+  verify_disposal: true            # PRD: cleanup on complete
+  check_permission_handling: true  # PRD: permission primer
+
+# ProMotion display (120Hz on iPhone 13 Pro+)
+promotion_settings:
+  require_plist_config: true       # Must have CADisableMinimumFrameDurationOnPhone
+  check_animation_curves: true     # Ensure smooth animations
+  max_frame_budget_ms: 8.33        # 120Hz = 8.33ms per frame
+  warn_expensive_builds: true      # Flag slow rebuilds
+
+# Haptic feedback (Swiss Utility requirement)
+haptic_settings:
+  prefer_impact_over_vibrate: true
+  verify_patterns:
+    light: ["shutter", "tap"]                # PRD: shutter tap
+    medium: ["save", "result", "complete"]   # PRD: scan complete
+    heavy: ["error", "rate_limit"]           # PRD: error/retry
+
+# Widget optimization
+widget_settings:
+  require_const_constructors: true           # Aggressive optimization
+  check_unnecessary_rebuilds: true
+  max_depth_without_keys: 5
+  prefer_stateless_over_stateful: true
+
+# Navigation (iOS-native feel)
+navigation_settings:
+  prefer_cupertino_routes: true              # iOS-first platform
+  check_route_transitions: true
+  verify_gesture_support: true               # Swipe up to library
+
+# Reporting
+reporting:
+  format: "markdown"
+  output_file: "ios-optimization-report.md"
+  include_code_snippets: true
+  prioritize_by_impact: true
+  group_by_category: true
+
+# Wingtip-specific checks
+custom_checks:
+  - name: "SSE stream handling"
+    description: "Verify SSE doesn't block UI thread"
+  - name: "Drift watch() vs get()"
+    description: "Ensure streams used for reactive UI"
+  - name: "Image compression isolate"
+    description: "Verify compute() for background processing"
+  - name: "Swiss Utility theme"
+    description: "Check for elevation: 0, border usage"
