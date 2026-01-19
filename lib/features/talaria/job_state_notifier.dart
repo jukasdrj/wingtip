@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/sse_client.dart';
 import 'package:wingtip/core/sse_client_provider.dart';
 import 'package:wingtip/core/talaria_client_provider.dart';
+import 'package:wingtip/data/database.dart';
+import 'package:wingtip/data/database_provider.dart';
 import 'package:wingtip/features/talaria/job_state.dart';
 
 /// Notifier for managing Talaria scan job state
@@ -92,12 +97,12 @@ class JobStateNotifier extends Notifier<JobState> {
   }
 
   /// Handle individual SSE events
-  void _handleSseEvent(
+  Future<void> _handleSseEvent(
     SseEvent event,
     String jobId,
     String streamUrl,
     String imagePath,
-  ) {
+  ) async {
     debugPrint('[JobStateNotifier] Handling SSE event: ${event.type}');
 
     switch (event.type) {
@@ -111,9 +116,10 @@ class JobStateNotifier extends Notifier<JobState> {
         );
 
       case SseEventType.result:
-        // Intermediate result - update state but keep processing
+        // Intermediate result - save to database and update state
         final resultData = event.data;
         debugPrint('[JobStateNotifier] Received result: $resultData');
+        await _saveBookResult(resultData);
         state = state.copyWith(result: resultData);
 
       case SseEventType.complete:
@@ -133,6 +139,77 @@ class JobStateNotifier extends Notifier<JobState> {
         debugPrint('[JobStateNotifier] Job error: $errorMessage');
         state = JobState.error(errorMessage);
         _sseSubscription?.cancel();
+    }
+  }
+
+  /// Save book result to database
+  Future<void> _saveBookResult(Map<String, dynamic> resultData) async {
+    try {
+      // Extract book data from result
+      final isbn = resultData['isbn'] as String?;
+      final title = resultData['title'] as String?;
+      final author = resultData['author'] as String?;
+      final coverUrl = resultData['coverUrl'] as String?;
+      final format = resultData['format'] as String?;
+      final spineConfidence = resultData['spineConfidence'] as num?;
+
+      // Validate required fields
+      if (isbn == null || isbn.isEmpty) {
+        debugPrint('[JobStateNotifier] Missing ISBN, skipping save');
+        return;
+      }
+      if (title == null || title.isEmpty) {
+        debugPrint('[JobStateNotifier] Missing title, skipping save');
+        return;
+      }
+      if (author == null || author.isEmpty) {
+        debugPrint('[JobStateNotifier] Missing author, skipping save');
+        return;
+      }
+
+      // Create book companion for insert
+      final book = BooksCompanion.insert(
+        isbn: isbn,
+        title: title,
+        author: author,
+        coverUrl: coverUrl != null && coverUrl.isNotEmpty
+            ? Value(coverUrl)
+            : const Value.absent(),
+        format: format != null && format.isNotEmpty
+            ? Value(format)
+            : const Value.absent(),
+        addedDate: DateTime.now().millisecondsSinceEpoch,
+        spineConfidence: spineConfidence != null
+            ? Value(spineConfidence.toDouble())
+            : const Value.absent(),
+      );
+
+      // Get database and insert (INSERT OR REPLACE)
+      final database = ref.read(databaseProvider);
+      await database.into(database.books).insertOnConflictUpdate(book);
+
+      debugPrint('[JobStateNotifier] Book saved: $isbn - $title');
+
+      // Trigger haptic feedback
+      await HapticFeedback.mediumImpact();
+
+      // Prefetch cover image if available
+      if (coverUrl != null && coverUrl.isNotEmpty) {
+        await _prefetchCoverImage(coverUrl);
+      }
+    } catch (e) {
+      debugPrint('[JobStateNotifier] Failed to save book: $e');
+    }
+  }
+
+  /// Prefetch cover image to cache
+  Future<void> _prefetchCoverImage(String imageUrl) async {
+    try {
+      debugPrint('[JobStateNotifier] Prefetching cover image: $imageUrl');
+      await DefaultCacheManager().downloadFile(imageUrl);
+      debugPrint('[JobStateNotifier] Cover image prefetched successfully');
+    } catch (e) {
+      debugPrint('[JobStateNotifier] Failed to prefetch cover image: $e');
     }
   }
 
