@@ -17,6 +17,7 @@ import 'package:wingtip/data/database.dart';
 import 'package:wingtip/data/database_provider.dart';
 import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/services/failed_scan_retention_service.dart';
+import 'package:wingtip/services/widget_data_service.dart';
 
 /// Notifier for managing Talaria scan job state
 class JobStateNotifier extends Notifier<JobState> {
@@ -757,6 +758,9 @@ class JobStateNotifier extends Notifier<JobState> {
       if (coverUrl != null && coverUrl.isNotEmpty) {
         await _prefetchCoverImage(coverUrl);
       }
+
+      // Update widget data after saving a book
+      await WidgetDataService.updateWidgetData(database);
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to save book: $e');
     }
