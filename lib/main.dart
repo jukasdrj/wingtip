@@ -6,9 +6,12 @@ import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_screen.dart';
 import 'package:wingtip/features/camera/camera_service.dart';
 import 'package:wingtip/features/camera/permission_primer_screen.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Preserve the splash screen
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // Performance logging: App start time
   final appStartTime = DateTime.now();
@@ -16,6 +19,9 @@ void main() async {
 
   // Hide system UI for full immersion
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+
+  // Minimum splash display time (500ms)
+  final splashTimer = Future.delayed(const Duration(milliseconds: 500));
 
   // Check camera permission status
   final cameraPermissionStatus = await Permission.camera.status;
@@ -29,8 +35,8 @@ void main() async {
     // Performance logging: Camera initialization started
     debugPrint('[Performance] Camera initialization started');
 
-    // Wait for camera to initialize
-    await cameraInitFuture;
+    // Wait for both camera initialization and minimum splash time
+    await Future.wait([cameraInitFuture, splashTimer]);
 
     // Performance logging: Cold start time
     final coldStartTime = DateTime.now().difference(appStartTime);
@@ -40,16 +46,32 @@ void main() async {
       debugPrint('[Performance] Camera initialization took ${cameraService.initializationDuration!.inMilliseconds}ms');
     }
   } else {
+    // Wait for minimum splash time even without camera initialization
+    await splashTimer;
     debugPrint('[Performance] Camera permission not granted, showing primer screen');
   }
 
   runApp(ProviderScope(child: MyApp(hasPermission: cameraPermissionStatus.isGranted)));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final bool hasPermission;
 
   const MyApp({super.key, required this.hasPermission});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Remove splash screen after first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FlutterNativeSplash.remove();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +81,7 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark,
       // Show permission primer if not granted, otherwise camera screen
-      home: hasPermission ? const CameraScreen() : const PermissionPrimerScreen(),
+      home: widget.hasPermission ? const CameraScreen() : const PermissionPrimerScreen(),
     );
   }
 }

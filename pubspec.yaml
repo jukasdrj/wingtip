@@ -76,6 +76,9 @@ dependencies:
   # File sharing
   share_plus: ^10.1.2
 
+  # Splash screen
+  flutter_native_splash: ^2.4.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -94,6 +97,9 @@ dev_dependencies:
   # Test utilities
   path_provider_platform_interface: ^2.0.0
   plugin_platform_interface: ^2.1.0
+
+  # Icon generation
+  flutter_launcher_icons: ^0.14.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -136,3 +142,23 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# App icon configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/icon/icon.png"
+  remove_alpha_ios: true
+
+# Splash screen configuration
+flutter_native_splash:
+  color: "#000000"
+  image: "assets/splash/splash.png"
+  android: true
+  ios: true
+  web: false
+  android_12:
+    color: "#000000"
+    image: "assets/splash/splash.png"
