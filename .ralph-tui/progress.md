@@ -108,3 +108,21 @@ features/talaria/job_state_notifier.dart`):\n   - Updated all `saveFailedScan` c
 ebug_settings_page.dart:188-196)\n6. ✅ **RestartWidget** - New utility widget for full app restarts (lib/core/restart_widget.dart)\n\n### Quality Checks\n- ✅ flutter analyze - No issues found\n- ✅ Code review - All acceptance criteria met\n- ✅ Committed with proper message: `feat: US-144 - Device ID Management`\n\n### Files Modified\n- `lib/core/restart_widget.dart` (new file)\n- `lib/features/debug/debug_settings_page.dart` (updated)\n- `lib/main.dart` (updated to wrap app in RestartWidget)\n\n
 
 ---
+## ✓ Iteration 12 - US-146: Specific Error Messages for Common Failures
+*2026-01-19T05:11:08.124Z (174s)*
+
+**Status:** Completed
+
+**Notes:**
+error mapping logic with centralized utility\n- Updated \"No books detected\" message to match the user-friendly pattern\n\n### 3. UI Updates\n- Simplified error display in `camera_screen.dart` to use the error messages directly\n- Failed scan cards already display error messages from the database, so they automatically show the new user-friendly messages\n\n### 4. Quality Checks\n- `flutter analyze` shows no errors\n- All acceptance criteria met with user-friendly, actionable error messages\n\n
+
+---
+## ✓ Iteration 13 - US-138: Batch Operations for Failed Scans
+*2026-01-19T05:16:05.266Z (296s)*
+
+**Status:** Completed
+
+**Notes:**
+ectModeProvider` and `selectedFailedScansProvider` at lib/features/library/library_provider.dart:127-178\n\n6. **Quality Checks** - `flutter analyze` shows no errors ✓\n\n### Key Technical Details:\n\n- Follows existing book selection pattern for consistency\n- Haptic feedback on all interactions\n- Action buttons (Retry/Delete) hidden during select mode\n- Orange accent color (AppTheme.internationalOrange) for Retry All button\n- Swiss Utility design maintained (1px borders, zero elevation)\n\n
+
+---

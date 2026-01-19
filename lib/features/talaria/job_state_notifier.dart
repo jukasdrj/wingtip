@@ -43,7 +43,8 @@ class JobStateNotifier extends Notifier<JobState> {
   /// Retry a failed scan by job ID
   ///
   /// Reads the image from failed_scans directory and re-uploads it
-  Future<void> retryFailedScan(String failedScanJobId) async {
+  /// Returns true if the retry was successful, false otherwise
+  Future<bool> retryFailedScan(String failedScanJobId) async {
     ScanJob? job;
     String? imagePath;
 
@@ -56,7 +57,7 @@ class JobStateNotifier extends Notifier<JobState> {
 
       if (failedScan == null) {
         debugPrint('[JobStateNotifier] Failed scan not found: $failedScanJobId');
-        return;
+        return false;
       }
 
       // Store image path for error handlers
@@ -78,7 +79,7 @@ class JobStateNotifier extends Notifier<JobState> {
           errorMessage: 'Image file missing - cannot retry',
           retentionPeriod: retentionDuration,
         );
-        return;
+        return false;
       }
 
       debugPrint('[JobStateNotifier] Uploading image for retry: $imagePath');
@@ -116,15 +117,20 @@ class JobStateNotifier extends Notifier<JobState> {
       // Start listening to SSE stream
       // Use the original failedScanJobId for cleanup tracking
       await _listenToStream(job.id, failedScanJobId, response.streamUrl);
+
+      return true;
     } on DioException catch (e) {
       debugPrint('[JobStateNotifier] DioException during retry upload: ${e.type}');
       await _handleRetryError(e, job, imagePath ?? '', failedScanJobId);
+      return false;
     } on SocketException catch (e) {
       debugPrint('[JobStateNotifier] SocketException during retry upload: $e');
       await _handleRetryError(e, job, imagePath ?? '', failedScanJobId);
+      return false;
     } on TimeoutException catch (e) {
       debugPrint('[JobStateNotifier] TimeoutException during retry upload: $e');
       await _handleRetryError(e, job, imagePath ?? '', failedScanJobId);
+      return false;
     } catch (e) {
       debugPrint('[JobStateNotifier] Retry upload failed: $e');
 
@@ -149,7 +155,66 @@ class JobStateNotifier extends Notifier<JobState> {
         // Update the failed scan with new error info
         await _updateFailedScanError(failedScanJobId, e.toString());
       }
+      return false;
     }
+  }
+
+  /// Retry all failed scans sequentially with throttling
+  ///
+  /// Processes all failed scans with 1 second delay between each upload
+  /// Returns a map with 'succeeded' and 'failed' counts
+  ///
+  /// Callback function is called after each retry with progress information
+  Future<Map<String, int>> retryAllFailedScans({
+    required void Function(int current, int total) onProgress,
+  }) async {
+    debugPrint('[JobStateNotifier] Starting batch retry of all failed scans');
+
+    // Get all failed scans
+    final database = ref.read(databaseProvider);
+    final failedScans = await database.select(database.failedScans).get();
+
+    if (failedScans.isEmpty) {
+      debugPrint('[JobStateNotifier] No failed scans to retry');
+      return {'succeeded': 0, 'failed': 0};
+    }
+
+    int succeeded = 0;
+    int failed = 0;
+    final total = failedScans.length;
+
+    debugPrint('[JobStateNotifier] Retrying $total failed scans with throttling');
+
+    for (int i = 0; i < failedScans.length; i++) {
+      final scan = failedScans[i];
+      final current = i + 1;
+
+      debugPrint('[JobStateNotifier] Retrying scan $current of $total: ${scan.jobId}');
+
+      // Notify progress
+      onProgress(current, total);
+
+      // Retry the scan
+      final success = await retryFailedScan(scan.jobId);
+
+      if (success) {
+        succeeded++;
+        debugPrint('[JobStateNotifier] Retry $current succeeded');
+      } else {
+        failed++;
+        debugPrint('[JobStateNotifier] Retry $current failed');
+      }
+
+      // Throttle: wait 1 second before next retry (except after last one)
+      if (i < failedScans.length - 1) {
+        debugPrint('[JobStateNotifier] Throttling: waiting 1 second before next retry');
+        await Future.delayed(const Duration(seconds: 1));
+      }
+    }
+
+    debugPrint('[JobStateNotifier] Batch retry completed: $succeeded succeeded, $failed failed');
+
+    return {'succeeded': succeeded, 'failed': failed};
   }
 
   /// Upload an image to Talaria for analysis

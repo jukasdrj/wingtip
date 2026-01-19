@@ -201,6 +201,53 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     }
   }
 
+  Future<void> _retryAllFailedScans(BuildContext context, int total) async {
+    if (total == 0) return;
+
+    // Show initial progress snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Retrying 0 of $total...'),
+        backgroundColor: AppTheme.borderGray,
+        duration: const Duration(days: 1), // Keep it visible until we dismiss it
+      ),
+    );
+
+    // Start the batch retry process
+    final result = await ref.read(jobStateProvider.notifier).retryAllFailedScans(
+      onProgress: (current, total) {
+        // Update progress toast
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Retrying $current of $total...'),
+              backgroundColor: AppTheme.borderGray,
+              duration: const Duration(days: 1), // Keep it visible
+            ),
+          );
+        }
+      },
+    );
+
+    // Hide progress toast
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      // Show summary toast
+      final succeeded = result['succeeded'] ?? 0;
+      final failed = result['failed'] ?? 0;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$succeeded succeeded, $failed failed'),
+          backgroundColor: AppTheme.borderGray,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final booksAsync = ref.watch(booksProvider);
@@ -527,10 +574,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                       child: ElevatedButton(
                         onPressed: () async {
                           HapticFeedback.lightImpact();
-                          // Retry all failed scans
-                          for (final scan in scans) {
-                            await ref.read(jobStateProvider.notifier).retryFailedScan(scan.jobId);
-                          }
+                          await _retryAllFailedScans(context, scans.length);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.internationalOrange,
