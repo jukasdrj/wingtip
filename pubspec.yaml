@@ -57,6 +57,9 @@ dependencies:
   dio: ^5.4.0
   connectivity_plus: ^6.1.1
 
+  # Camera
+  camera: ^0.11.0+2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
