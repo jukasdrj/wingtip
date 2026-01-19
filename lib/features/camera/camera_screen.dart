@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
 import 'package:wingtip/features/camera/image_processor.dart';
+import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/features/talaria/processing_stack_widget.dart';
 import 'package:wingtip/features/talaria/job_state_provider.dart';
 import 'package:wingtip/features/library/library_screen.dart';
+import 'package:wingtip/widgets/error_snack_bar.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -26,12 +28,37 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   Offset? _focusPoint;
   bool _showFocusIndicator = false;
   Timer? _countdownTimer;
+  final Set<String> _shownErrorJobIds = {};
 
   @override
   void initState() {
     super.initState();
     _initializeZoomLevels();
     _startCountdownTimer();
+    _setupJobErrorListener();
+  }
+
+  void _setupJobErrorListener() {
+    // Listen for job state changes and show error notifications
+    ref.listenManual(jobStateProvider, (previous, next) {
+      if (!mounted) return;
+
+      // Find jobs with errors that we haven't shown yet
+      for (final job in next.jobs) {
+        if (job.status == JobStatus.error &&
+            job.errorMessage != null &&
+            !_shownErrorJobIds.contains(job.id)) {
+          // Mark as shown
+          _shownErrorJobIds.add(job.id);
+
+          // Show error notification
+          ErrorSnackBar.show(
+            context,
+            message: job.errorMessage!,
+          );
+        }
+      }
+    });
   }
 
   @override

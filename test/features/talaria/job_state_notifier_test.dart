@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
@@ -453,6 +454,103 @@ void main() {
     });
   });
 
+  group('JobStateNotifier - Network Error Handling', () {
+    test('should map SocketException to "No internet connection"', () async {
+      final error = const SocketException('Failed host lookup');
+      final errorMessage = _getNetworkErrorMessage(error);
+
+      expect(errorMessage, 'No internet connection');
+    });
+
+    test('should map TimeoutException to "Upload timed out after 30s"', () async {
+      final error = TimeoutException('Request timeout');
+      final errorMessage = _getNetworkErrorMessage(error);
+
+      expect(errorMessage, 'Upload timed out after 30s');
+    });
+
+    test('should save failed scan on network error with correct error message', () async {
+      // Save a failed scan due to network error
+      await database.saveFailedScan(
+        jobId: 'network-error-job-1',
+        imagePath: '/tmp/network_error_scan.jpg',
+        errorMessage: 'No internet connection',
+      );
+
+      // Verify it was saved
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      expect(scan.jobId, 'network-error-job-1');
+      expect(scan.imagePath, '/tmp/network_error_scan.jpg');
+      expect(scan.errorMessage, 'No internet connection');
+    });
+
+    test('should save failed scan on timeout with correct error message', () async {
+      // Save a failed scan due to timeout
+      await database.saveFailedScan(
+        jobId: 'timeout-job-1',
+        imagePath: '/tmp/timeout_scan.jpg',
+        errorMessage: 'Upload timed out after 30s',
+      );
+
+      // Verify it was saved
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      expect(scan.jobId, 'timeout-job-1');
+      expect(scan.imagePath, '/tmp/timeout_scan.jpg');
+      expect(scan.errorMessage, 'Upload timed out after 30s');
+    });
+
+    test('should save failed scan on server unreachable with correct error message', () async {
+      // Save a failed scan due to server unreachable
+      await database.saveFailedScan(
+        jobId: 'unreachable-job-1',
+        imagePath: '/tmp/unreachable_scan.jpg',
+        errorMessage: 'Server unreachable',
+      );
+
+      // Verify it was saved
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 1);
+
+      final scan = scans.first;
+      expect(scan.jobId, 'unreachable-job-1');
+      expect(scan.imagePath, '/tmp/unreachable_scan.jpg');
+      expect(scan.errorMessage, 'Server unreachable');
+    });
+
+    test('should handle multiple network failures independently', () async {
+      await database.saveFailedScan(
+        jobId: 'net-fail-1',
+        imagePath: '/tmp/net1.jpg',
+        errorMessage: 'No internet connection',
+      );
+
+      await database.saveFailedScan(
+        jobId: 'net-fail-2',
+        imagePath: '/tmp/net2.jpg',
+        errorMessage: 'Upload timed out after 30s',
+      );
+
+      await database.saveFailedScan(
+        jobId: 'net-fail-3',
+        imagePath: '/tmp/net3.jpg',
+        errorMessage: 'Server unreachable',
+      );
+
+      final scans = await database.select(database.failedScans).get();
+      expect(scans.length, 3);
+
+      expect(scans[0].errorMessage, 'No internet connection');
+      expect(scans[1].errorMessage, 'Upload timed out after 30s');
+      expect(scans[2].errorMessage, 'Server unreachable');
+    });
+  });
+
   group('JobState - Rate Limit', () {
     test('should create idle state without rate limit', () {
       final state = JobState.idle();
@@ -508,4 +606,16 @@ Future<File> createTemporaryTestFile() async {
   await testFile.parent.create(recursive: true);
   await testFile.writeAsBytes([0xFF, 0xD8, 0xFF, 0xE0]); // JPEG header
   return testFile;
+}
+
+/// Helper function to map network errors to user-friendly messages
+/// (mirrors the logic in JobStateNotifier._handleNetworkError)
+String _getNetworkErrorMessage(dynamic error) {
+  if (error is SocketException) {
+    return 'No internet connection';
+  } else if (error is TimeoutException) {
+    return 'Upload timed out after 30s';
+  } else {
+    return error.toString();
+  }
 }

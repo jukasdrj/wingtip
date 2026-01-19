@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -41,9 +42,10 @@ class JobStateNotifier extends Notifier<JobState> {
   ///
   /// Adds a new job to the queue and starts processing
   Future<void> uploadImage(String imagePath) async {
+    ScanJob? job;
     try {
       // Create new job in uploading state
-      final job = ScanJob.uploading(imagePath);
+      job = ScanJob.uploading(imagePath);
 
       // Add job to queue
       state = state.copyWith(
@@ -74,6 +76,15 @@ class JobStateNotifier extends Notifier<JobState> {
 
       // Start listening to SSE stream
       await _listenToStream(job.id, response.jobId, response.streamUrl);
+    } on DioException catch (e) {
+      debugPrint('[JobStateNotifier] DioException during upload: ${e.type}');
+      await _handleNetworkError(e, job, imagePath);
+    } on SocketException catch (e) {
+      debugPrint('[JobStateNotifier] SocketException during upload: $e');
+      await _handleNetworkError(e, job, imagePath);
+    } on TimeoutException catch (e) {
+      debugPrint('[JobStateNotifier] TimeoutException during upload: $e');
+      await _handleNetworkError(e, job, imagePath);
     } catch (e) {
       debugPrint('[JobStateNotifier] Upload failed: $e');
 
@@ -85,12 +96,10 @@ class JobStateNotifier extends Notifier<JobState> {
         HapticFeedback.heavyImpact();
 
         // Update the job to error state if it exists
-        final jobs = state.jobs;
-        if (jobs.isNotEmpty) {
-          final lastJob = jobs.last;
+        if (job != null) {
           _updateJob(
-            lastJob.id,
-            lastJob.copyWith(
+            job.id,
+            job.copyWith(
               status: JobStatus.error,
               errorMessage: e.toString(),
             ),
@@ -136,6 +145,67 @@ class JobStateNotifier extends Notifier<JobState> {
       debugPrint('[JobStateNotifier] Rate limit expired, clearing');
       state = state.clearRateLimit();
     });
+  }
+
+  /// Handle network upload errors
+  ///
+  /// Maps exception types to user-friendly error messages and saves to failed scans
+  Future<void> _handleNetworkError(
+    dynamic error,
+    ScanJob? job,
+    String imagePath,
+  ) async {
+    // Trigger error haptic feedback
+    HapticFeedback.heavyImpact();
+
+    // Map exception to user-friendly error message
+    String errorMessage;
+    String? serverJobId;
+
+    if (error is DioException) {
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          errorMessage = 'Upload timed out after 30s';
+        case DioExceptionType.connectionError:
+          errorMessage = 'Server unreachable';
+        case DioExceptionType.badResponse:
+          errorMessage = 'Server error: ${error.response?.statusCode ?? "unknown"}';
+        case DioExceptionType.cancel:
+          errorMessage = 'Upload cancelled';
+        default:
+          errorMessage = 'No internet connection';
+      }
+    } else if (error is SocketException) {
+      errorMessage = 'No internet connection';
+    } else if (error is TimeoutException) {
+      errorMessage = 'Upload timed out after 30s';
+    } else {
+      errorMessage = error.toString();
+    }
+
+    debugPrint('[JobStateNotifier] Network error: $errorMessage');
+
+    // Update job to error state if it exists
+    if (job != null) {
+      _updateJob(
+        job.id,
+        job.copyWith(
+          status: JobStatus.error,
+          errorMessage: errorMessage,
+        ),
+      );
+
+      // Use job's ID as server job ID for failed scans
+      // This allows us to track and retry the failed upload
+      serverJobId = job.id;
+    }
+
+    // Save failed scan to database with persistent image storage
+    if (serverJobId != null) {
+      await _saveFailedScan(serverJobId, imagePath, errorMessage);
+    }
   }
 
   /// Update a job in the state
