@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
+import 'package:wingtip/features/camera/image_processor.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -32,8 +33,31 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       }
     });
 
-    // TODO: Add actual image capture logic here
-    // This will be implemented in a future story
+    // Capture and process image
+    try {
+      final cameraService = ref.read(cameraServiceProvider);
+      if (cameraService.controller == null) {
+        debugPrint('[CameraScreen] Cannot capture: camera not initialized');
+        return;
+      }
+
+      // Capture image
+      final XFile image = await cameraService.controller!.takePicture();
+      debugPrint('[CameraScreen] Image captured: ${image.path}');
+
+      // Process image in background isolate
+      final result = await ImageProcessor.processImage(image.path);
+
+      debugPrint('[CameraScreen] Image processed successfully:');
+      debugPrint('  - Output: ${result.outputPath}');
+      debugPrint('  - Processing time: ${result.processingTimeMs}ms');
+      debugPrint('  - Size reduction: ${result.originalSize} -> ${result.processedSize} bytes');
+
+      // TODO: Handle processed image (e.g., upload, save to database, etc.)
+      // This will be implemented in a future story
+    } catch (e) {
+      debugPrint('[CameraScreen] Error capturing/processing image: $e');
+    }
   }
 
   @override
