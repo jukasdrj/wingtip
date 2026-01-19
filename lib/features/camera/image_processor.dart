@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:wingtip/features/camera/image_processing_metrics_provider.dart';
 
 /// Parameters for image processing in isolate
 class ImageProcessingParams {
@@ -45,7 +47,10 @@ class ImageProcessor {
   /// - Compresses to JPEG quality 85
   /// - Saves to platform temp directory
   /// - Logs performance metrics
-  static Future<ImageProcessingResult> processImage(String sourcePath) async {
+  static Future<ImageProcessingResult> processImage(
+    String sourcePath, {
+    WidgetRef? ref,
+  }) async {
     final startTime = DateTime.now();
 
     // Get file size before processing
@@ -75,13 +80,20 @@ class ImageProcessor {
     final endTime = DateTime.now();
     final processingTimeMs = endTime.difference(startTime).inMilliseconds;
 
-    debugPrint('[ImageProcessor] Processing complete in ${processingTimeMs}ms');
+    debugPrint('[ImageProcessor] Image processed in ${processingTimeMs}ms');
     debugPrint('[ImageProcessor] Processed file size: ${(processedSize / 1024).toStringAsFixed(2)} KB');
     debugPrint('[ImageProcessor] Compression ratio: ${((1 - processedSize / originalSize) * 100).toStringAsFixed(1)}%');
 
     // Verify processing time is under 500ms
     if (processingTimeMs >= 500) {
       debugPrint('[ImageProcessor] WARNING: Processing time exceeded 500ms threshold');
+    }
+
+    // Record metrics if ref is provided
+    if (ref != null) {
+      ref
+          .read(imageProcessingMetricsNotifierProvider.notifier)
+          .recordProcessingTime(processingTimeMs);
     }
 
     return ImageProcessingResult(

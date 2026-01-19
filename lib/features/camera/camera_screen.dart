@@ -175,7 +175,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       debugPrint('[CameraScreen] Image captured: ${image.path}');
 
       // Process image in background isolate
-      final result = await ImageProcessor.processImage(image.path);
+      final result = await ImageProcessor.processImage(image.path, ref: ref);
 
       debugPrint('[CameraScreen] Image processed successfully:');
       debugPrint('  - Output: ${result.outputPath}');

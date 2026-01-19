@@ -9,6 +9,7 @@ import 'package:wingtip/core/device_id_provider.dart';
 import 'package:wingtip/core/restart_widget.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/data/failed_scans_repository.dart';
+import 'package:wingtip/features/camera/image_processing_metrics_provider.dart';
 import 'package:wingtip/services/csv_export_service_provider.dart';
 import 'package:wingtip/services/failed_scan_retention_service.dart';
 import 'package:wingtip/services/network_reconnect_service.dart';
@@ -118,6 +119,15 @@ class DebugSettingsPage extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             const _NetworkReconnectSection(),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Image Processing Metrics',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            const _ImageProcessingMetricsSection(),
             const SizedBox(height: 32),
             const Divider(),
             const SizedBox(height: 16),
@@ -575,6 +585,130 @@ class _NetworkReconnectSection extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ImageProcessingMetricsSection extends ConsumerWidget {
+  const _ImageProcessingMetricsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final metrics = ref.watch(imageProcessingMetricsNotifierProvider);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (metrics.totalProcessed > 0) ...[
+              _MetricRow(
+                label: 'Images Processed',
+                value: '${metrics.totalProcessed}',
+              ),
+              const SizedBox(height: 12),
+              _MetricRow(
+                label: 'Average Time',
+                value: '${metrics.averageTimeMs.toStringAsFixed(1)}ms',
+                isHighlighted: !metrics.meetsTargetPerformance,
+              ),
+              const SizedBox(height: 12),
+              _MetricRow(
+                label: 'Recent Average (last 10)',
+                value: '${metrics.recentAverageTimeMs.toStringAsFixed(1)}ms',
+              ),
+              const SizedBox(height: 12),
+              _MetricRow(
+                label: 'Min / Max',
+                value: '${metrics.minTimeMs}ms / ${metrics.maxTimeMs}ms',
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Target: < 500ms',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
+                  ),
+                  Icon(
+                    metrics.meetsTargetPerformance
+                        ? Icons.check_circle
+                        : Icons.warning,
+                    color: metrics.meetsTargetPerformance
+                        ? Colors.green
+                        : AppTheme.internationalOrange,
+                    size: 20,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    ref
+                        .read(imageProcessingMetricsNotifierProvider.notifier)
+                        .reset();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reset Metrics'),
+                ),
+              ),
+            ] else ...[
+              Text(
+                'No images processed yet',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Metrics will appear here after capturing images',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricRow extends StatelessWidget {
+  const _MetricRow({
+    required this.label,
+    required this.value,
+    this.isHighlighted = false,
+  });
+
+  final String label;
+  final String value;
+  final bool isHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        Text(
+          value,
+          style: AppTheme.monoStyle(fontSize: 14).copyWith(
+            fontWeight: FontWeight.bold,
+            color: isHighlighted
+                ? AppTheme.internationalOrange
+                : AppTheme.textPrimary,
+          ),
+        ),
+      ],
     );
   }
 }

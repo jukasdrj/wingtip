@@ -153,3 +153,12 @@ bility\n- Timestamp formatted per specifications\n- Expandable help section with
 s no errors  \n✅ Committed with proper message\n\n### Technical Details:\n- Uses SharedPreferences to persist auto-retry preference\n- NetworkReconnectListener detects state transitions and prevents duplicate toasts\n- Leverages existing `retryAllFailedScans` functionality with throttling\n- Swiss Utility design maintained (OLED black, 1px borders, orange accent)\n- Proper haptic feedback (medium impact on toast, light on button taps)\n- Dialog shows progress and auto-closes after completion\n\n
 
 ---
+## ✓ Iteration 17 - US-148: Graceful SSE Stream Interruption Handling
+*2026-01-19T05:29:21.739Z (158s)*
+
+**Status:** Completed
+
+**Notes:**
+ase\n2. If the connection drops before receiving 'complete' or 'error', the SSE client detects this and yields a synthetic error event\n3. The job state notifier handles this error event by:\n   - Marking the job as failed with haptic feedback\n   - Saving the failed scan entry with persistent image storage\n   - The books already saved remain in the library\n4. User sees partial results in library + can retry from failed scans view\n5. Retry re-uploads the full image for complete processing\n\n
+
+---
