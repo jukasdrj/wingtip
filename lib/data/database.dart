@@ -282,6 +282,17 @@ class AppDatabase extends _$AppDatabase {
 
     await into(failedScans).insert(failedScan);
   }
+
+  // Get a failed scan by job ID
+  Future<FailedScan?> getFailedScan(String jobId) async {
+    final query = select(failedScans)..where((t) => t.jobId.equals(jobId));
+    return query.getSingleOrNull();
+  }
+
+  // Delete a failed scan by job ID
+  Future<void> deleteFailedScan(String jobId) async {
+    await (delete(failedScans)..where((t) => t.jobId.equals(jobId))).go();
+  }
 }
 
 LazyDatabase _openConnection() {

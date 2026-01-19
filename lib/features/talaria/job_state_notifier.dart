@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wingtip/core/failed_scans_directory.dart';
 import 'package:wingtip/core/sse_client.dart';
 import 'package:wingtip/core/sse_client_provider.dart';
 import 'package:wingtip/core/talaria_client_provider.dart';
@@ -256,7 +257,7 @@ class JobStateNotifier extends Notifier<JobState> {
         // Intermediate result - save to database and update state
         final resultData = event.data;
         debugPrint('[JobStateNotifier] Received result for job $jobId: $resultData');
-        await _saveBookResult(resultData);
+        await _saveBookResult(resultData, serverJobId);
         _updateJob(
           jobId,
           job.copyWith(result: resultData),
@@ -302,17 +303,21 @@ class JobStateNotifier extends Notifier<JobState> {
     }
   }
 
-  /// Save failed scan to database
+  /// Save failed scan to database and move image to persistent storage
   Future<void> _saveFailedScan(
     String jobId,
     String imagePath,
     String errorMessage,
   ) async {
     try {
+      // Move image from temp to persistent failed_scans directory
+      final persistentPath = await FailedScansDirectory.moveImage(imagePath, jobId);
+      debugPrint('[JobStateNotifier] Moved failed scan image to: $persistentPath');
+
       final database = ref.read(databaseProvider);
       await database.saveFailedScan(
         jobId: jobId,
-        imagePath: imagePath,
+        imagePath: persistentPath,
         errorMessage: errorMessage,
       );
       debugPrint('[JobStateNotifier] Failed scan saved: $jobId');
@@ -322,7 +327,8 @@ class JobStateNotifier extends Notifier<JobState> {
   }
 
   /// Save book result to database
-  Future<void> _saveBookResult(Map<String, dynamic> resultData) async {
+  /// If this is a retry of a failed scan, delete the failed scan entry and image
+  Future<void> _saveBookResult(Map<String, dynamic> resultData, String serverJobId) async {
     try {
       // Extract book data from result
       final isbn = resultData['isbn'] as String?;
@@ -369,6 +375,9 @@ class JobStateNotifier extends Notifier<JobState> {
 
       debugPrint('[JobStateNotifier] Book saved: $isbn - $title');
 
+      // Check if this was a retry of a failed scan and clean it up
+      await _cleanupFailedScanIfExists(serverJobId);
+
       // Trigger haptic feedback
       await HapticFeedback.mediumImpact();
 
@@ -378,6 +387,29 @@ class JobStateNotifier extends Notifier<JobState> {
       }
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to save book: $e');
+    }
+  }
+
+  /// Clean up a failed scan entry and its image if it exists
+  Future<void> _cleanupFailedScanIfExists(String jobId) async {
+    try {
+      final database = ref.read(databaseProvider);
+      final failedScan = await database.getFailedScan(jobId);
+
+      if (failedScan != null) {
+        debugPrint('[JobStateNotifier] Cleaning up failed scan for job: $jobId');
+
+        // Delete the image file
+        await FailedScansDirectory.deleteImage(jobId);
+        debugPrint('[JobStateNotifier] Deleted failed scan image');
+
+        // Delete the database entry
+        await database.deleteFailedScan(jobId);
+        debugPrint('[JobStateNotifier] Deleted failed scan database entry');
+      }
+    } catch (e) {
+      debugPrint('[JobStateNotifier] Failed to cleanup failed scan: $e');
+      // Don't throw - this is a cleanup operation and shouldn't fail the save
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wingtip/core/failed_scans_directory.dart';
 import 'database.dart';
 import 'database_provider.dart';
 
@@ -26,9 +27,20 @@ class FailedScansRepository {
   }
 
   Future<void> deleteFailedScan(int id) async {
-    await (_database.delete(_database.failedScans)
+    // Get the failed scan to retrieve the jobId for image deletion
+    final scan = await (_database.select(_database.failedScans)
           ..where((t) => t.id.equals(id)))
-        .go();
+        .getSingleOrNull();
+
+    if (scan != null) {
+      // Delete the image file
+      await FailedScansDirectory.deleteImage(scan.jobId);
+
+      // Delete the database entry
+      await (_database.delete(_database.failedScans)
+            ..where((t) => t.id.equals(id)))
+          .go();
+    }
   }
 
   Future<FailedScan?> retryFailedScan(int id) async {
