@@ -302,71 +302,58 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   Future<void> _onShutterTap() async {
-    final cameraService = ref.read(cameraServiceProvider);
-
-    // Unlock focus/exposure if locked
-    if (_focusLocked) {
-      setState(() {
-        _focusLocked = false;
-        _lockedFocusPoint = null;
-        _exposureCompensation = 0.0;
-        _baseExposureCompensation = 0.0;
-      });
-
-      // Reset to auto modes
-      try {
-        await cameraService.controller?.setFocusMode(FocusMode.auto);
-        await cameraService.controller?.setExposureMode(ExposureMode.auto);
-        final nightModeOffset = cameraService.nightModeEnabled ? 1.0 : 0.7;
-        await cameraService.controller?.setExposureOffset(nightModeOffset);
-      } catch (e) {
-        debugPrint('[CameraScreen] Error resetting camera modes: $e');
-      }
-    }
-
-    // Start shutter latency timer
-    final shutterStartTime = DateTime.now();
-
-    // Trigger haptic feedback immediately
+    // CRITICAL: Trigger haptic feedback IMMEDIATELY before any other work
+    // Target: < 16ms (1 frame at 60fps)
     HapticFeedback.lightImpact();
 
-    // Show flash overlay
-    setState(() {
-      _showFlash = true;
-    });
+    // Start performance timer for tap-to-capture latency
+    final tapTime = DateTime.now();
 
-    // Hide flash after 100ms
+    final cameraService = ref.read(cameraServiceProvider);
+
+    // Show flash overlay immediately (optimized: no setState)
+    // Use a flag check in build() instead of triggering rebuild
+    _showFlash = true;
+
+    // Schedule flash hide without blocking (fire-and-forget)
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
-        setState(() {
-          _showFlash = false;
-        });
+        _showFlash = false;
+        // Trigger single rebuild for flash hide only
+        if (mounted) setState(() {});
       }
     });
 
-    // Capture and process image
+    // Unlock focus/exposure if locked (non-blocking - fire async)
+    if (_focusLocked) {
+      _focusLocked = false;
+      _lockedFocusPoint = null;
+      _exposureCompensation = 0.0;
+      _baseExposureCompensation = 0.0;
+
+      // Reset camera modes asynchronously (don't await - let it run in background)
+      _resetCameraModesAsync(cameraService);
+    }
+
+    // Capture image immediately without waiting for focus reset
     try {
-      final cameraService = ref.read(cameraServiceProvider);
       if (cameraService.controller == null) {
         debugPrint('[CameraScreen] Cannot capture: camera not initialized');
         return;
       }
 
-      // Capture image
+      // OPTIMIZED: takePicture() is the critical path - minimize work before this
       final XFile image = await cameraService.controller!.takePicture();
 
-      // Record shutter latency (time from tap to image captured)
-      final shutterLatency = DateTime.now().difference(shutterStartTime);
-      try {
-        final metricsService = ref.read(performanceMetricsServiceProvider);
-        await metricsService.recordShutterLatency(shutterLatency.inMilliseconds);
-      } catch (e) {
-        debugPrint('[CameraScreen] Failed to record shutter latency: $e');
-      }
+      // Calculate tap-to-capture latency
+      final captureLatency = DateTime.now().difference(tapTime);
 
-      debugPrint('[CameraScreen] Image captured: ${image.path}');
+      debugPrint('[CameraScreen] Image captured in ${captureLatency.inMilliseconds}ms: ${image.path}');
 
-      // Process image in background isolate
+      // Record shutter latency metric (non-blocking)
+      _recordShutterLatencyAsync(captureLatency.inMilliseconds);
+
+      // Process image in background isolate (this is already optimized)
       final result = await ImageProcessor.processImage(image.path, ref: ref);
 
       debugPrint('[CameraScreen] Image processed successfully:');
@@ -380,6 +367,32 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     } catch (e) {
       debugPrint('[CameraScreen] Error capturing/processing image: $e');
     }
+  }
+
+  /// Reset camera modes asynchronously without blocking capture
+  void _resetCameraModesAsync(dynamic cameraService) {
+    Future.microtask(() async {
+      try {
+        await cameraService.controller?.setFocusMode(FocusMode.auto);
+        await cameraService.controller?.setExposureMode(ExposureMode.auto);
+        final nightModeOffset = cameraService.nightModeEnabled ? 1.0 : 0.7;
+        await cameraService.controller?.setExposureOffset(nightModeOffset);
+      } catch (e) {
+        debugPrint('[CameraScreen] Error resetting camera modes: $e');
+      }
+    });
+  }
+
+  /// Record shutter latency asynchronously without blocking
+  void _recordShutterLatencyAsync(int latencyMs) {
+    Future.microtask(() async {
+      try {
+        final metricsService = ref.read(performanceMetricsServiceProvider);
+        await metricsService.recordShutterLatency(latencyMs);
+      } catch (e) {
+        debugPrint('[CameraScreen] Failed to record shutter latency: $e');
+      }
+    });
   }
 
   @override

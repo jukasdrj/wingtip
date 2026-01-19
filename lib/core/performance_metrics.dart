@@ -16,7 +16,9 @@ class PerformanceMetrics {
 
   // Targets from PRD
   static const int coldStartTargetMs = 1000;
-  static const int shutterLatencyTargetMs = 50;
+  // US-163: Shutter latency target reduced from 50ms to 30ms
+  // Measures tap-to-capture latency (not tap-to-haptic which should be < 16ms)
+  static const int shutterLatencyTargetMs = 30;
 
   bool get meetsColdStartTarget => coldStartTimeMs < coldStartTargetMs;
   bool get meetsShutterLatencyTarget => shutterLatencyMs < shutterLatencyTargetMs;

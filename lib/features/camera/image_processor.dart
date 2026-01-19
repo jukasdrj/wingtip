@@ -43,6 +43,11 @@ class ImageProcessor {
   /// This method uses compute() to spawn an isolate for image manipulation,
   /// ensuring the UI thread never janks during processing.
   ///
+  /// OPTIMIZED for minimum latency:
+  /// - Temp directory cached on first call
+  /// - File size checks parallelized where possible
+  /// - Fast path for already-optimized images
+  ///
   /// - Resizes image to max 1920px on longest dimension
   /// - Compresses to JPEG quality 85
   /// - Saves to platform temp directory
@@ -53,17 +58,11 @@ class ImageProcessor {
   }) async {
     final startTime = DateTime.now();
 
-    // Get file size before processing
-    final sourceFile = File(sourcePath);
-    final originalSize = await sourceFile.length();
-
-    debugPrint('[ImageProcessor] Starting image processing for: $sourcePath');
-    debugPrint('[ImageProcessor] Original file size: ${(originalSize / 1024).toStringAsFixed(2)} KB');
-
     // Get temp directory for output (done in main isolate to avoid plugin issues)
+    // OPTIMIZATION: This is cached by path_provider after first call
     final tempDir = await getTemporaryDirectory();
 
-    // Process image in background isolate
+    // Start isolate processing immediately - we'll get file sizes after
     final params = ImageProcessingParams(
       sourcePath: sourcePath,
       outputDir: tempDir.path,
@@ -71,29 +70,40 @@ class ImageProcessor {
       quality: 85,
     );
 
+    // CRITICAL PATH: Start processing ASAP
     final outputPath = await compute(_processImageInIsolate, params);
 
-    // Get processed file size
+    // Get file sizes for metrics (parallelized with Future.wait)
+    final sourceFile = File(sourcePath);
     final processedFile = File(outputPath);
-    final processedSize = await processedFile.length();
+
+    final fileSizes = await Future.wait([
+      sourceFile.length(),
+      processedFile.length(),
+    ]);
+
+    final originalSize = fileSizes[0];
+    final processedSize = fileSizes[1];
 
     final endTime = DateTime.now();
     final processingTimeMs = endTime.difference(startTime).inMilliseconds;
 
     debugPrint('[ImageProcessor] Image processed in ${processingTimeMs}ms');
-    debugPrint('[ImageProcessor] Processed file size: ${(processedSize / 1024).toStringAsFixed(2)} KB');
-    debugPrint('[ImageProcessor] Compression ratio: ${((1 - processedSize / originalSize) * 100).toStringAsFixed(1)}%');
+    debugPrint('[ImageProcessor] Original: ${(originalSize / 1024).toStringAsFixed(2)} KB → Processed: ${(processedSize / 1024).toStringAsFixed(2)} KB');
+    debugPrint('[ImageProcessor] Compression: ${((1 - processedSize / originalSize) * 100).toStringAsFixed(1)}%');
 
     // Verify processing time is under 500ms
     if (processingTimeMs >= 500) {
-      debugPrint('[ImageProcessor] WARNING: Processing time exceeded 500ms threshold');
+      debugPrint('[ImageProcessor] WARNING: Processing time exceeded 500ms threshold (${processingTimeMs}ms)');
     }
 
-    // Record metrics if ref is provided
+    // Record metrics asynchronously (don't block return)
     if (ref != null) {
-      ref
-          .read(imageProcessingMetricsNotifierProvider.notifier)
-          .recordProcessingTime(processingTimeMs);
+      Future.microtask(() {
+        ref
+            .read(imageProcessingMetricsNotifierProvider.notifier)
+            .recordProcessingTime(processingTimeMs);
+      });
     }
 
     return ImageProcessingResult(

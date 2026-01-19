@@ -39,7 +39,13 @@ class PerformanceMetricsService {
     debugPrint('[PerformanceMetrics] Cold start: ${durationMs}ms (avg: ${avgColdStart.toStringAsFixed(0)}ms, min: ${minColdStart}ms, max: ${maxColdStart}ms over ${history.length} launches)');
   }
 
-  /// Record shutter latency
+  /// Record shutter latency (tap-to-capture time)
+  ///
+  /// US-163: Measures time from user tap to image captured.
+  /// Target: < 30ms average
+  ///
+  /// Note: Haptic feedback should trigger within 16ms (1 frame @ 60fps)
+  /// This metric measures the full capture pipeline latency.
   Future<void> recordShutterLatency(int latencyMs) async {
     final latencies = _getIntList(_shutterLatenciesKey);
     latencies.add(latencyMs);
@@ -50,7 +56,11 @@ class PerformanceMetricsService {
     }
 
     await _prefs.setString(_shutterLatenciesKey, jsonEncode(latencies));
-    debugPrint('[PerformanceMetrics] Shutter latency: ${latencyMs}ms (avg: ${_average(latencies).toStringAsFixed(1)}ms)');
+
+    final avgLatency = _average(latencies);
+    final targetMet = latencyMs < 30 ? '✓' : '✗';
+
+    debugPrint('[PerformanceMetrics] Shutter latency: ${latencyMs}ms $targetMet (avg: ${avgLatency.toStringAsFixed(1)}ms over ${latencies.length} captures)');
   }
 
   /// Record upload time

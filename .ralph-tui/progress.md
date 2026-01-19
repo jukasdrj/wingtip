@@ -63,3 +63,40 @@ n cached image finishes loading)\n  \n- **Optimistic by design**: Covers prefetc
 ✅\n\n6. **Commit created** - Committed with proper message format ✅\n\n### Key Technical Details:\n\n- Used `CupertinoPageRoute` for all navigation to enable iOS swipe-back gesture\n- Used `CupertinoActionSheet` for native iOS context menu styling\n- Maintained existing `BouncingScrollPhysics` with `AlwaysScrollableScrollPhysics` for ProMotion support\n- Integrated with existing Riverpod providers for data management\n- Preserved existing select mode functionality alongside new context menu\n\n
 
 ---
+## ✓ Iteration 7 - US-159: iOS Camera Features - Night Mode & Depth
+*2026-01-19T16:16:03.209Z (198s)*
+
+**Status:** Completed
+
+**Notes:**
+aptic feedback integrated\n- ✅ Swiss Utility design maintained (gold accent, 1px borders, OLED black)\n\n### Files Modified/Created:\n- `lib/features/camera/camera_service.dart` - Core Night Mode & depth logic\n- `lib/features/camera/camera_screen.dart` - UI indicator & controls\n- `lib/features/camera/camera_settings_service.dart` - Settings persistence (new)\n- `lib/features/camera/camera_settings_provider.dart` - Riverpod provider (new)\n- `lib/main.dart` - Settings restoration on startup\n\n
+
+---
+## ✓ Iteration 8 - US-160: iOS Widget - Recent Scans Counter
+*2026-01-19T16:21:33.107Z (329s)*
+
+**Status:** Completed
+
+**Notes:**
+tus":"completed","activeForm":"Creating Xcode setup documentation"},{"content":"Run flutter analyze and fix any errors","status":"completed","activeForm":"Running flutter analyze and fixing any errors"},{"content":"Commit with feat: US-160 message","status":"completed","activeForm":"Committing with feat: US-160 message"}]}}
+{"type":"assistant","message":{"model":"claude-sonnet-4-5-20250929","id":"msg_012UqPLcyXmZwyLWkKJQ5Yxc","type":"message","role":"assistant","content":[{"type":"text","text":"
+
+---
+## ✓ Iteration 9 - US-161: iOS Camera Enhancement - Lock Focus & Exposure
+*2026-01-19T16:24:29.304Z (175s)*
+
+**Status:** Completed
+
+**Notes:**
+OS Camera Enhancement - Lock Focus & Exposure (99e3901)  \n⏳ **Manual verification** - Ready for iOS device testing\n\n### Usage Instructions\n\n1. **Lock focus**: Long-press on any point in the camera preview\n2. **Adjust exposure**: While locked, swipe up (brighter) or down (darker)\n3. **Unlock**: Tap anywhere else on screen OR press the shutter button\n\nThis enhancement significantly improves capture quality for challenging scenarios like reflective covers and mixed lighting conditions.\n\n
+
+---
+## ✓ Iteration 10 - US-162: Cold Start Optimization
+*2026-01-19T16:27:09.379Z (159s)*
+
+**Status:** Completed
+
+**Notes:**
+for:\n# [Performance] Cold start completed in XXXms\n# [PerformanceMetrics] Cold start: XXXms (avg: XXXms, min: XXXms, max: XXXms over N launches)\n```\n\nThe app will now display comprehensive cold start metrics showing min/avg/max over the last 20 launches, making it easy to track performance regressions.\n\n### Quality Checks\n- ✅ `flutter analyze` - No errors\n- ✅ All acceptance criteria implemented\n- ✅ Performance logging tracks metrics over time\n- ✅ Commit message follows convention\n\n
+
+---
