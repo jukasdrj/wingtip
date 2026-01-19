@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:wingtip/core/device_id_provider.dart';
 import 'package:wingtip/services/csv_export_service_provider.dart';
 import 'package:wingtip/widgets/error_snack_bar.dart';
@@ -91,6 +95,15 @@ class DebugSettingsPage extends ConsumerWidget {
               icon: const Icon(Icons.error_outline),
               label: const Text('Show Error Snackbar'),
             ),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Image Cache',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            _ImageCacheSection(),
           ],
         ),
       ),
@@ -179,6 +192,149 @@ class _DeviceIdSection extends ConsumerWidget {
               },
               icon: const Icon(Icons.refresh),
               label: const Text('Regenerate Device ID'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageCacheSection extends ConsumerStatefulWidget {
+  const _ImageCacheSection();
+
+  @override
+  ConsumerState<_ImageCacheSection> createState() => _ImageCacheSectionState();
+}
+
+class _ImageCacheSectionState extends ConsumerState<_ImageCacheSection> {
+  String _cacheSize = 'Calculating...';
+  bool _isClearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _calculateCacheSize();
+  }
+
+  Future<void> _calculateCacheSize() async {
+    try {
+      // Get the temporary directory where cache is stored
+      final tempDir = await getTemporaryDirectory();
+      final cacheDir = Directory('${tempDir.path}/libCachedImageData');
+
+      int totalSize = 0;
+
+      // Calculate total size of all files in cache directory
+      if (await cacheDir.exists()) {
+        await for (final entity in cacheDir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            try {
+              final fileSize = await entity.length();
+              totalSize += fileSize;
+            } catch (e) {
+              // Skip files we can't read
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _cacheSize = _formatBytes(totalSize);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _cacheSize = 'Error calculating';
+        });
+      }
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  Future<void> _clearCache() async {
+    setState(() {
+      _isClearing = true;
+    });
+
+    try {
+      final cacheManager = DefaultCacheManager();
+      await cacheManager.emptyCache();
+
+      await _calculateCacheSize();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Image cache cleared'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ErrorSnackBar.show(
+          context,
+          message: 'Failed to clear cache: $e',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isClearing = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Cache Size',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                Text(
+                  _cacheSize,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isClearing ? null : _clearCache,
+                icon: _isClearing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline),
+                label: Text(_isClearing ? 'Clearing...' : 'Clear Image Cache'),
+              ),
             ),
           ],
         ),
