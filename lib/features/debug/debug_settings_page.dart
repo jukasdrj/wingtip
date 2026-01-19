@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wingtip/core/device_id_provider.dart';
+import 'package:wingtip/core/restart_widget.dart';
+import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/data/failed_scans_repository.dart';
 import 'package:wingtip/services/csv_export_service_provider.dart';
 import 'package:wingtip/services/failed_scan_retention_service.dart';
@@ -140,9 +142,7 @@ class _DeviceIdSection extends ConsumerWidget {
                 Expanded(
                   child: SelectableText(
                     deviceId,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontFamily: 'monospace',
-                        ),
+                    style: AppTheme.monoStyle(fontSize: 14),
                   ),
                 ),
                 IconButton(
@@ -170,7 +170,7 @@ class _DeviceIdSection extends ConsumerWidget {
                   builder: (context) => AlertDialog(
                     title: const Text('Regenerate Device ID?'),
                     content: const Text(
-                      'This will generate a new device ID. This action is irreversible and should only be used for debugging.',
+                      'This will reset your device identity. Rate limits and analytics will restart. Continue?',
                     ),
                     actions: [
                       TextButton(
@@ -179,7 +179,7 @@ class _DeviceIdSection extends ConsumerWidget {
                       ),
                       ElevatedButton(
                         onPressed: () => Navigator.of(context).pop(true),
-                        child: const Text('Regenerate'),
+                        child: const Text('Continue'),
                       ),
                     ],
                   ),
@@ -188,16 +188,10 @@ class _DeviceIdSection extends ConsumerWidget {
                 if (confirmed == true && context.mounted) {
                   final service = ref.read(deviceIdServiceProvider);
                   await service.regenerateDeviceId();
-                  // Invalidate the provider to fetch the new ID
-                  ref.invalidate(deviceIdProvider);
 
+                  // Restart the entire app to reinitialize with new device ID
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Device ID regenerated'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
+                    RestartWidget.restartApp(context);
                   }
                 }
               },

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/core/app_lifecycle_observer.dart';
+import 'package:wingtip/core/restart_widget.dart';
 import 'package:wingtip/features/camera/camera_screen.dart';
 import 'package:wingtip/features/camera/camera_service.dart';
 import 'package:wingtip/features/camera/permission_primer_screen.dart';
@@ -64,10 +65,12 @@ void main() async {
   }
 
   runApp(
-    // Use the same container for the app
-    UncontrolledProviderScope(
-      container: container,
-      child: MyApp(hasPermission: cameraPermissionStatus.isGranted),
+    // Wrap the app in RestartWidget to enable full app restarts
+    RestartWidget(
+      child: UncontrolledProviderScope(
+        container: container,
+        child: MyApp(hasPermission: cameraPermissionStatus.isGranted),
+      ),
     ),
   );
 }
