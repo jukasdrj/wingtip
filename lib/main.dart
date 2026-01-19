@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wingtip/core/crash_reporting_service.dart';
+import 'package:wingtip/core/crash_context_provider.dart';
 import 'package:wingtip/core/memory_pressure_handler.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/core/app_lifecycle_observer.dart';
@@ -18,6 +20,23 @@ import 'package:wingtip/services/failed_scans_cleanup_service_provider.dart';
 import 'package:wingtip/widgets/network_reconnect_listener.dart';
 
 void main() async {
+  // Initialize Sentry for crash reporting and analytics
+  await CrashReportingService.initialize(
+    // TODO: Replace with actual Sentry DSN in production
+    // Get DSN from: https://sentry.io/settings/projects/<your-project>/keys/
+    dsn: const String.fromEnvironment(
+      'SENTRY_DSN',
+      defaultValue: '', // Empty DSN disables Sentry in development
+    ),
+    environment: const String.fromEnvironment(
+      'SENTRY_ENVIRONMENT',
+      defaultValue: 'development',
+    ),
+    appRunner: _runApp,
+  );
+}
+
+Future<void> _runApp() async {
   // Preserve the splash screen
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
@@ -163,6 +182,9 @@ class _MyAppState extends State<MyApp> {
 
         // Watch performance overlay state
         final showPerformanceOverlay = ref.watch(performanceOverlayProvider);
+
+        // Initialize crash context monitoring
+        ref.watch(crashContextProvider);
 
         return NetworkReconnectListener(
           child: MaterialApp(

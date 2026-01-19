@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wingtip/core/crash_reporting_service.dart';
 import 'package:wingtip/core/error_messages.dart';
 import 'package:wingtip/core/failed_scans_directory.dart';
 import 'package:wingtip/core/failure_categorizer.dart';
@@ -247,6 +248,11 @@ class JobStateNotifier extends Notifier<JobState> {
       );
 
       debugPrint('[JobStateNotifier] Created job ${job.id}: $imagePath');
+
+      // Log analytics event
+      CrashReportingService.logEvent('scan_started', parameters: {
+        'job_id': job.id,
+      });
 
       // Get TalariaClient from provider
       final client = await ref.read(talariaClientProvider.future);
@@ -634,6 +640,13 @@ class JobStateNotifier extends Notifier<JobState> {
             result: resultData,
           ),
         );
+
+        // Log analytics event
+        CrashReportingService.logEvent('scan_completed', parameters: {
+          'job_id': jobId,
+          'books_found': booksFound,
+        });
+
         await _sseSubscriptions[jobId]?.cancel();
         _sseSubscriptions.remove(jobId);
 
@@ -757,6 +770,13 @@ class JobStateNotifier extends Notifier<JobState> {
       await database.into(database.books).insertOnConflictUpdate(book);
 
       debugPrint('[JobStateNotifier] Book saved: $isbn - $title');
+
+      // Log analytics event
+      CrashReportingService.logEvent('book_saved', parameters: {
+        'isbn': isbn,
+        'has_cover': coverUrl != null && coverUrl.isNotEmpty,
+        'spine_confidence': spineConfidence?.toDouble() ?? 0.0,
+      });
 
       // Check if this was a retry of a failed scan and clean it up
       await _cleanupFailedScanIfExists(serverJobId);

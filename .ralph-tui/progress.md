@@ -155,3 +155,21 @@ no errors  \n✅ Committed with proper message  \n\n### Technical Details:\n- Fi
 ey metrics: Total Books, Books This Week/Month, Scan Streak\n- ✅ Show top authors and formats as simple bar charts\n- ✅ Calculate and display average books per scanning session\n- ✅ Use Swiss Utility design: monospace numbers, minimal charts with 1px borders\n- ✅ Query metrics from Drift database with efficient aggregations\n- ✅ flutter analyze shows no errors\n- ✅ Manual verification: Stats accurately reflect library data\n\n**Commit:** `368995a` - `feat: US-168 - Book Statistics Dashboard`\n\n
 
 ---
+## ✓ Iteration 17 - US-169: Onboarding Flow
+*2026-01-19T16:59:36.455Z (163s)*
+
+**Status:** Completed
+
+**Notes:**
+g_screen.dart` (3 slides with carousel)\n- Created: `lib/features/onboarding/onboarding_provider.dart` (completion state)\n- Modified: `lib/main.dart` (routing logic)\n- Modified: `test/widget_test.dart` (test compatibility)\n\n### 🔄 User Flow\n\n1. First launch → **Onboarding Screen** (3 slides)\n2. After completion → **Permission Primer Screen** (US-128 integration)\n3. After permission granted → **Camera Screen**\n4. Subsequent launches → Skip onboarding, route based on permission status\n\n
+
+---
+## ✓ Iteration 18 - US-170: App Store Assets
+*2026-01-19T17:09:22.531Z (585s)*
+
+**Status:** Completed
+
+**Notes:**
+bmit** - Follow `SUBMISSION-CHECKLIST.md` for App Store Connect upload\n\n### 📈 Key Highlights\n\n- **Privacy-First Messaging:** Emphasizes zero tracking, local-first storage\n- **Swiss Design Focus:** OLED black, high contrast, zero elevation aesthetic\n- **iOS-Optimized:** Native performance, haptic feedback, ProMotion support\n- **Professional Quality:** 2000+ lines of documentation, comprehensive checklists\n- **Production-Ready:** All text approved, just needs screenshots/video capture\n\n
+
+---
