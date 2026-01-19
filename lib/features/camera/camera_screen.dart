@@ -2,9 +2,11 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
 import 'package:wingtip/features/camera/image_processor.dart';
 import 'package:wingtip/features/talaria/job_state_provider.dart';
+import 'package:wingtip/features/library/library_screen.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -74,6 +76,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           if (_showFlash) _buildFlashOverlay(),
           if (cameraService.isInitialized && cameraService.controller != null)
             _buildShutterButton(),
+          _buildLibraryButton(context),
         ],
       ),
     );
@@ -134,6 +137,39 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                 width: 4,
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLibraryButton(BuildContext context) {
+    return Positioned(
+      top: 48,
+      right: 16,
+      child: GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const LibraryScreen(),
+            ),
+          );
+        },
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppTheme.borderGray,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Colors.white,
+              width: 1,
+            ),
+          ),
+          child: const Icon(
+            Icons.grid_view_rounded,
+            color: AppTheme.textPrimary,
+            size: 24,
           ),
         ),
       ),

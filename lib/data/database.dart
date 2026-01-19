@@ -52,6 +52,17 @@ class AppDatabase extends _$AppDatabase {
       },
     );
   }
+
+  // Query all books ordered by added date descending
+  Stream<List<Book>> watchAllBooks() {
+    return (select(books)..orderBy([(t) => OrderingTerm.desc(t.addedDate)]))
+        .watch();
+  }
+
+  Future<List<Book>> getAllBooks() {
+    return (select(books)..orderBy([(t) => OrderingTerm.desc(t.addedDate)]))
+        .get();
+  }
 }
 
 LazyDatabase _openConnection() {
