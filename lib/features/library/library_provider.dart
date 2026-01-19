@@ -5,6 +5,7 @@ import '../../data/database_provider.dart';
 import 'sort_options.dart';
 import 'sort_service.dart';
 import 'filter_model.dart';
+import 'collections_provider.dart';
 
 // Search query notifier
 class SearchQueryNotifier extends Notifier<String> {
@@ -117,7 +118,7 @@ final sortOptionProvider = AsyncNotifierProvider<SortOptionNotifier, SortOption>
   SortOptionNotifier.new,
 );
 
-// Books provider that reacts to search query, filter, and sort
+// Books provider that reacts to search query, filter, sort, and collection selection
 final booksProvider = StreamProvider<List<Book>>((ref) {
   final database = ref.watch(databaseProvider);
   final searchQuery = ref.watch(searchQueryProvider);
@@ -125,6 +126,7 @@ final booksProvider = StreamProvider<List<Book>>((ref) {
   final sortReviewFirst = ref.watch(sortReviewFirstProvider);
   final sortOptionAsync = ref.watch(sortOptionProvider);
   final filterState = ref.watch(filterStateProvider);
+  final selectedCollectionId = ref.watch(selectedCollectionProvider);
 
   // Use the sort option value when available, otherwise use default
   final sortOption = sortOptionAsync.when(
@@ -133,6 +135,16 @@ final booksProvider = StreamProvider<List<Book>>((ref) {
     error: (_, stack) => SortOption.dateAddedNewest,
   );
 
+  // If a collection is selected, show books in that collection
+  if (selectedCollectionId != null) {
+    return database.watchBooksInCollection(
+      selectedCollectionId,
+      sortReviewFirst: sortReviewFirst,
+      sortOption: sortOption,
+    );
+  }
+
+  // Otherwise, show all books with search/filter/sort
   return database.searchBooks(
     searchQuery,
     reviewNeeded: reviewNeededFilter,

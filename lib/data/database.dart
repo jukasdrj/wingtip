@@ -64,14 +64,31 @@ class FailedScans extends Table {
   IntColumn get expiresAt => integer()();
 }
 
-@DriftDatabase(tables: [Books, FailedScans])
+@DataClassName('Collection')
+class Collections extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  IntColumn get createdAt => integer()();
+}
+
+@DataClassName('BookCollection')
+class BookCollections extends Table {
+  TextColumn get isbn => text()();
+  IntColumn get collectionId => integer()();
+  IntColumn get addedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {isbn, collectionId};
+}
+
+@DriftDatabase(tables: [Books, FailedScans, Collections, BookCollections])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   AppDatabase.test(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -173,6 +190,11 @@ class AppDatabase extends _$AppDatabase {
         if (from < 5) {
           // Add spine_image_path column to books
           await m.addColumn(books, books.spineImagePath);
+        }
+        if (from < 6) {
+          // Add Collections and BookCollections tables
+          await m.createTable(collections);
+          await m.createTable(bookCollections);
         }
       },
     );
@@ -621,6 +643,128 @@ class AppDatabase extends _$AppDatabase {
     final updated = await (update(books)..where((t) => t.isbn.equals(isbn))).write(companion);
     return updated > 0;
   }
+
+  // Collection Management Methods
+
+  // Create a new collection
+  Future<int> createCollection(String name) async {
+    final companion = CollectionsCompanion(
+      name: Value(name),
+      createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+    );
+    return await into(collections).insert(companion);
+  }
+
+  // Get all collections with book counts
+  Stream<List<CollectionWithCount>> watchCollectionsWithCounts() {
+    final query = customSelect(
+      '''SELECT c.id, c.name, c.created_at, COUNT(bc.isbn) as book_count
+         FROM collections c
+         LEFT JOIN book_collections bc ON c.id = bc.collection_id
+         GROUP BY c.id
+         ORDER BY c.created_at DESC''',
+      readsFrom: {collections, bookCollections},
+    );
+
+    return query.watch().map((rows) {
+      return rows.map((row) {
+        return CollectionWithCount(
+          id: row.read<int>('id'),
+          name: row.read<String>('name'),
+          createdAt: row.read<int>('created_at'),
+          bookCount: row.read<int>('book_count'),
+        );
+      }).toList();
+    });
+  }
+
+  // Get books in a collection
+  Stream<List<Book>> watchBooksInCollection(
+    int collectionId, {
+    bool sortReviewFirst = false,
+    SortOption sortOption = SortOption.dateAddedNewest,
+  }) {
+    final orderByClause = _buildSqlOrderByClause(
+      sortOption: sortOption,
+      sortReviewFirst: sortReviewFirst,
+    );
+
+    final query = customSelect(
+      '''SELECT b.* FROM books b
+         INNER JOIN book_collections bc ON b.isbn = bc.isbn
+         WHERE bc.collection_id = ?
+         $orderByClause''',
+      variables: [Variable.withInt(collectionId)],
+      readsFrom: {books, bookCollections},
+    );
+
+    return query.watch().map((rows) {
+      return rows.map((row) => books.map(row.data)).toList();
+    });
+  }
+
+  // Add book to collection
+  Future<void> addBookToCollection(String isbn, int collectionId) async {
+    final companion = BookCollectionsCompanion(
+      isbn: Value(isbn),
+      collectionId: Value(collectionId),
+      addedAt: Value(DateTime.now().millisecondsSinceEpoch),
+    );
+    await into(bookCollections).insert(companion, mode: InsertMode.insertOrIgnore);
+  }
+
+  // Remove book from collection
+  Future<void> removeBookFromCollection(String isbn, int collectionId) async {
+    await (delete(bookCollections)
+          ..where((t) => t.isbn.equals(isbn) & t.collectionId.equals(collectionId)))
+        .go();
+  }
+
+  // Get collections for a specific book
+  Future<List<Collection>> getCollectionsForBook(String isbn) async {
+    final query = customSelect(
+      '''SELECT c.* FROM collections c
+         INNER JOIN book_collections bc ON c.id = bc.collection_id
+         WHERE bc.isbn = ?
+         ORDER BY c.name''',
+      variables: [Variable.withString(isbn)],
+      readsFrom: {collections, bookCollections},
+    );
+
+    final rows = await query.get();
+    return rows.map((row) => collections.map(row.data)).toList();
+  }
+
+  // Delete a collection (cascade delete book_collections)
+  Future<void> deleteCollection(int collectionId) async {
+    await (delete(bookCollections)..where((t) => t.collectionId.equals(collectionId))).go();
+    await (delete(collections)..where((t) => t.id.equals(collectionId))).go();
+  }
+
+  // Rename a collection
+  Future<bool> renameCollection(int collectionId, String newName) async {
+    final companion = CollectionsCompanion(
+      id: Value(collectionId),
+      name: Value(newName),
+    );
+    final updated = await (update(collections)..where((t) => t.id.equals(collectionId))).write(companion);
+    return updated > 0;
+  }
+}
+
+// Helper class for collections with book counts
+class CollectionWithCount {
+  final int id;
+  final String name;
+  final int createdAt;
+  final int bookCount;
+
+  CollectionWithCount({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+    required this.bookCount,
+  });
 }
 
 LazyDatabase _openConnection() {

@@ -19,6 +19,7 @@ import 'sort_options.dart';
 import 'widgets/empty_library_state.dart';
 import 'widgets/failed_scan_card.dart' as failed_card;
 import 'widgets/filter_bottom_sheet.dart';
+import 'collections_provider.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -36,7 +37,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -415,6 +416,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 unselectedLabelColor: AppTheme.textSecondary,
                 tabs: [
                   const Tab(text: 'All Books'),
+                  const Tab(text: 'Collections'),
                   Tab(
                     text: failedScansCount > 0
                         ? 'Failed ($failedScansCount)'
@@ -435,6 +437,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         children: [
           // All Books Tab
           _buildBooksTab(context, booksAsync),
+          // Collections Tab
+          _buildCollectionsTab(context),
           // Failed Scans Tab
           _buildFailedScansTab(context, failedScansAsync),
         ],
@@ -496,6 +500,76 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 ),
               ),
             ),
+          ),
+          // Collection filter indicator
+          Consumer(
+            builder: (context, ref, child) {
+              final selectedCollectionId = ref.watch(selectedCollectionProvider);
+              final collectionsAsync = ref.watch(collectionsWithCountsProvider);
+
+              if (selectedCollectionId == null) return const SizedBox.shrink();
+
+              return collectionsAsync.when(
+                data: (collections) {
+                  final collection = collections.firstWhere(
+                    (c) => c.id == selectedCollectionId,
+                    orElse: () => CollectionWithCount(
+                      id: 0,
+                      name: 'Unknown',
+                      createdAt: 0,
+                      bookCount: 0,
+                    ),
+                  );
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.internationalOrange.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppTheme.internationalOrange,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.collections_bookmark,
+                            size: 16,
+                            color: AppTheme.internationalOrange,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Filtered by: ${collection.name}',
+                            style: const TextStyle(
+                              color: AppTheme.internationalOrange,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              ref.read(selectedCollectionProvider.notifier).clear();
+                            },
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: AppTheme.internationalOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (error, stackTrace) => const SizedBox.shrink(),
+              );
+            },
           ),
           // Filter and Sort controls
           Padding(
@@ -896,6 +970,406 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       ),
     );
   }
+
+  Widget _buildCollectionsTab(BuildContext context) {
+    final collectionsAsync = ref.watch(collectionsWithCountsProvider);
+
+    return collectionsAsync.when(
+      data: (collections) {
+        if (collections.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.collections_bookmark_outlined,
+                  size: 64,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No collections yet',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => _showCreateCollectionDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Create Collection'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.internationalOrange,
+                    foregroundColor: AppTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            // Create Collection button at top
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showCreateCollectionDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Create Collection'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.internationalOrange,
+                    foregroundColor: AppTheme.textPrimary,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      side: const BorderSide(
+                        color: AppTheme.internationalOrange,
+                        width: 1.0,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ),
+            // Collections list
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                itemCount: collections.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final collection = collections[index];
+                  return _buildCollectionCard(context, collection);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(
+        child: CircularProgressIndicator(
+          color: AppTheme.internationalOrange,
+        ),
+      ),
+      error: (error, stack) => Center(
+        child: Text(
+          'Error loading collections',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollectionCard(BuildContext context, CollectionWithCount collection) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        // Set the selected collection and switch to All Books tab
+        ref.read(selectedCollectionProvider.notifier).setCollection(collection.id);
+        _tabController.animateTo(0); // Switch to All Books tab
+      },
+      onLongPress: () {
+        HapticFeedback.mediumImpact();
+        _showCollectionContextMenu(context, collection);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: AppTheme.borderGray,
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Collection icon
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderGray,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppTheme.internationalOrange.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.collections_bookmark,
+                  color: AppTheme.internationalOrange,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Collection name and details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      collection.name,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${collection.bookCount} ${collection.bookCount == 1 ? 'book' : 'books'}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textSecondary,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              // Book count badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.internationalOrange.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppTheme.internationalOrange.withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  '${collection.bookCount}',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.internationalOrange,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCreateCollectionDialog(BuildContext context) {
+    HapticFeedback.lightImpact();
+    final TextEditingController nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.borderGray,
+        title: const Text(
+          'Create Collection',
+          style: TextStyle(color: AppTheme.textPrimary),
+        ),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          style: const TextStyle(color: AppTheme.textPrimary),
+          decoration: InputDecoration(
+            hintText: 'Collection name',
+            hintStyle: const TextStyle(color: AppTheme.textSecondary),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.borderGray),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.borderGray),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.internationalOrange),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                await ref.read(collectionOperationsProvider.notifier).createCollection(name);
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  HapticFeedback.mediumImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Collection "$name" created'),
+                      backgroundColor: AppTheme.borderGray,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Create',
+              style: TextStyle(color: AppTheme.internationalOrange),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCollectionContextMenu(BuildContext context, CollectionWithCount collection) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoActionSheet(
+        actions: <CupertinoActionSheetAction>[
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _showRenameCollectionDialog(context, collection);
+            },
+            child: const Text('Rename'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () async {
+              Navigator.pop(context);
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: AppTheme.borderGray,
+                  title: const Text(
+                    'Delete Collection?',
+                    style: TextStyle(color: AppTheme.textPrimary),
+                  ),
+                  content: Text(
+                    'This will remove the collection but keep all books in your library.',
+                    style: const TextStyle(color: AppTheme.textSecondary),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(color: AppTheme.internationalOrange),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed == true && context.mounted) {
+                await ref.read(collectionOperationsProvider.notifier).deleteCollection(collection.id);
+                HapticFeedback.mediumImpact();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Collection "${collection.name}" deleted'),
+                      backgroundColor: AppTheme.borderGray,
+                    ),
+                  );
+                }
+              }
+            },
+            isDestructiveAction: true,
+            child: const Text('Delete'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+  }
+
+  void _showRenameCollectionDialog(BuildContext context, CollectionWithCount collection) {
+    final TextEditingController nameController = TextEditingController(text: collection.name);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.borderGray,
+        title: const Text(
+          'Rename Collection',
+          style: TextStyle(color: AppTheme.textPrimary),
+        ),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          style: const TextStyle(color: AppTheme.textPrimary),
+          decoration: InputDecoration(
+            hintText: 'Collection name',
+            hintStyle: const TextStyle(color: AppTheme.textSecondary),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.borderGray),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.borderGray),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.internationalOrange),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final newName = nameController.text.trim();
+              if (newName.isNotEmpty && newName != collection.name) {
+                await ref.read(collectionOperationsProvider.notifier).renameCollection(collection.id, newName);
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  HapticFeedback.mediumImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Collection renamed to "$newName"'),
+                      backgroundColor: AppTheme.borderGray,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Rename',
+              style: TextStyle(color: AppTheme.internationalOrange),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class AnimatedBookCard extends StatefulWidget {
@@ -1050,6 +1524,13 @@ class _BookCardState extends ConsumerState<BookCard>
             },
             child: const Text('View Details'),
           ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _showAddToCollectionSheet(context);
+            },
+            child: const Text('Add to Collection'),
+          ),
           if (widget.book.reviewNeeded)
             CupertinoActionSheetAction(
               onPressed: () async {
@@ -1112,6 +1593,184 @@ class _BookCardState extends ConsumerState<BookCard>
           child: const Text('Cancel'),
         ),
       ),
+    );
+  }
+
+  void _showAddToCollectionSheet(BuildContext context) {
+    HapticFeedback.lightImpact();
+
+    final collectionsAsync = ref.read(collectionsWithCountsProvider);
+    final bookCollectionsAsync = ref.read(bookCollectionsProvider(widget.book.isbn));
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppTheme.oledBlack,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            border: Border(
+              top: BorderSide(color: AppTheme.borderGray, width: 1),
+              left: BorderSide(color: AppTheme.borderGray, width: 1),
+              right: BorderSide(color: AppTheme.borderGray, width: 1),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Add to Collection',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                collectionsAsync.when(
+                  data: (collections) {
+                    if (collections.isEmpty) {
+                      return Column(
+                        children: [
+                          Text(
+                            'No collections yet. Create one first.',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: AppTheme.textSecondary,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                // Switch to Collections tab
+                                // We need to access the parent state
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.internationalOrange,
+                                foregroundColor: AppTheme.textPrimary,
+                              ),
+                              child: const Text('Go to Collections'),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return bookCollectionsAsync.when(
+                      data: (bookCollections) {
+                        final bookCollectionIds = bookCollections.map((c) => c.id).toSet();
+
+                        return ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.of(context).size.height * 0.5,
+                          ),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: collections.length,
+                            separatorBuilder: (context, index) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final collection = collections[index];
+                              final isInCollection = bookCollectionIds.contains(collection.id);
+
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(
+                                  isInCollection
+                                      ? Icons.check_circle
+                                      : Icons.circle_outlined,
+                                  color: isInCollection
+                                      ? AppTheme.internationalOrange
+                                      : AppTheme.textSecondary,
+                                ),
+                                title: Text(
+                                  collection.name,
+                                  style: TextStyle(
+                                    color: AppTheme.textPrimary,
+                                    fontWeight: isInCollection
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                                trailing: Text(
+                                  '${collection.bookCount}',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                                onTap: () async {
+                                  HapticFeedback.lightImpact();
+                                  if (isInCollection) {
+                                    await ref.read(collectionOperationsProvider.notifier)
+                                        .removeBookFromCollection(widget.book.isbn, collection.id);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Removed from "${collection.name}"'),
+                                          backgroundColor: AppTheme.borderGray,
+                                        ),
+                                      );
+                                    }
+                                  } else {
+                                    await ref.read(collectionOperationsProvider.notifier)
+                                        .addBookToCollection(widget.book.isbn, collection.id);
+                                    HapticFeedback.mediumImpact();
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Added to "${collection.name}"'),
+                                          backgroundColor: AppTheme.borderGray,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                  // Refresh the book collections
+                                  ref.invalidate(bookCollectionsProvider(widget.book.isbn));
+                                },
+                              );
+                            },
+                          ),
+                        );
+                      },
+                      loading: () => const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24.0),
+                          child: CircularProgressIndicator(
+                            color: AppTheme.internationalOrange,
+                          ),
+                        ),
+                      ),
+                      error: (error, stackTrace) => Text(
+                        'Error loading collections',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      ),
+                    );
+                  },
+                  loading: () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24.0),
+                      child: CircularProgressIndicator(
+                        color: AppTheme.internationalOrange,
+                      ),
+                    ),
+                  ),
+                  error: (error, stackTrace) => Text(
+                    'Error loading collections',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
