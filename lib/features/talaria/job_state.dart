@@ -10,6 +10,7 @@ class ScanJob {
   final String? progressMessage; // Stage message: 'Looking...', 'Reading...', etc.
   final Map<String, dynamic>? result;
   final DateTime createdAt;
+  final DateTime? sseListeningStartedAt; // When SSE stream listening started
 
   const ScanJob({
     required this.id,
@@ -22,6 +23,7 @@ class ScanJob {
     this.progressMessage,
     this.result,
     required this.createdAt,
+    this.sseListeningStartedAt,
   });
 
   factory ScanJob.uploading(String imagePath) {
@@ -41,6 +43,7 @@ class ScanJob {
     double? progress,
     String? progressMessage,
     Map<String, dynamic>? result,
+    DateTime? sseListeningStartedAt,
   }) {
     return ScanJob(
       id: id,
@@ -53,6 +56,7 @@ class ScanJob {
       progressMessage: progressMessage ?? this.progressMessage,
       result: result ?? this.result,
       createdAt: createdAt,
+      sseListeningStartedAt: sseListeningStartedAt ?? this.sseListeningStartedAt,
     );
   }
 }

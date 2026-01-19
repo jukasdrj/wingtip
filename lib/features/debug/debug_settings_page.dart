@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wingtip/core/device_id_provider.dart';
+import 'package:wingtip/core/performance_metrics.dart';
+import 'package:wingtip/core/performance_metrics_provider.dart';
 import 'package:wingtip/core/restart_widget.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/data/database_provider.dart';
@@ -129,6 +131,15 @@ class DebugSettingsPage extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             const _NetworkReconnectSection(),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Performance Metrics',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            const _PerformanceMetricsSection(),
             const SizedBox(height: 32),
             const Divider(),
             const SizedBox(height: 16),
@@ -949,6 +960,238 @@ class _FailedScanAnalyticsSectionState
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PerformanceMetricsSection extends ConsumerWidget {
+  const _PerformanceMetricsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    try {
+      final metrics = ref.watch(performanceMetricsProvider);
+
+      return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'App Performance',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Reset Metrics?'),
+                            content: const Text(
+                              'This will clear all performance tracking data.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.of(context).pop(true),
+                                child: const Text('Reset'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirmed == true) {
+                          final service = ref.read(performanceMetricsServiceProvider);
+                          await service.resetMetrics();
+                          // Force refresh
+                          ref.invalidate(performanceMetricsProvider);
+                        }
+                      },
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Reset'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Metrics Table
+                _PerformanceMetricRow(
+                  label: 'Cold Start',
+                  target: '< ${PerformanceMetrics.coldStartTargetMs}ms',
+                  actual: metrics.coldStartTimeMs > 0
+                      ? '${metrics.coldStartTimeMs}ms'
+                      : 'N/A',
+                  meetsTarget: metrics.coldStartTimeMs == 0 || metrics.meetsColdStartTarget,
+                  hasData: metrics.coldStartTimeMs > 0,
+                ),
+                const SizedBox(height: 16),
+                _PerformanceMetricRow(
+                  label: 'Shutter Latency',
+                  target: '< ${PerformanceMetrics.shutterLatencyTargetMs}ms',
+                  actual: metrics.shutterLatencyMs > 0
+                      ? '${metrics.shutterLatencyMs}ms'
+                      : 'N/A',
+                  meetsTarget: metrics.shutterLatencyMs == 0 || metrics.meetsShutterLatencyTarget,
+                  hasData: metrics.shutterLatencyMs > 0,
+                ),
+                const SizedBox(height: 16),
+                _PerformanceMetricRow(
+                  label: 'Avg Upload Time',
+                  target: '-',
+                  actual: metrics.avgUploadTimeMs > 0
+                      ? '${metrics.avgUploadTimeMs}ms'
+                      : 'N/A',
+                  meetsTarget: true,
+                  hasData: metrics.avgUploadTimeMs > 0,
+                ),
+                const SizedBox(height: 16),
+                _PerformanceMetricRow(
+                  label: 'Avg SSE First Result',
+                  target: '-',
+                  actual: metrics.avgSseFirstResultTimeMs > 0
+                      ? '${metrics.avgSseFirstResultTimeMs}ms'
+                      : 'N/A',
+                  meetsTarget: true,
+                  hasData: metrics.avgSseFirstResultTimeMs > 0,
+                ),
+                const SizedBox(height: 16),
+                _PerformanceMetricRow(
+                  label: 'Frame Drops',
+                  target: '-',
+                  actual: '${metrics.frameDropCount}',
+                  meetsTarget: true,
+                  hasData: true,
+                ),
+
+                // Legend
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Meets Target',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textSecondary,
+                          ),
+                    ),
+                    const SizedBox(width: 24),
+                    const Icon(Icons.warning, color: AppTheme.internationalOrange, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Below Target',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textSecondary,
+                          ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+    } catch (error) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Error loading metrics: $error',
+            style: const TextStyle(color: AppTheme.internationalOrange),
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _PerformanceMetricRow extends StatelessWidget {
+  const _PerformanceMetricRow({
+    required this.label,
+    required this.target,
+    required this.actual,
+    required this.meetsTarget,
+    required this.hasData,
+  });
+
+  final String label;
+  final String target;
+  final String actual;
+  final bool meetsTarget;
+  final bool hasData;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppTheme.borderGray),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          // Metric label
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          // Target
+          Expanded(
+            flex: 1,
+            child: Text(
+              target,
+              style: AppTheme.monoStyle(fontSize: 12).copyWith(
+                color: AppTheme.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          // Actual
+          Expanded(
+            flex: 1,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  actual,
+                  style: AppTheme.monoStyle(fontSize: 14).copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: hasData && !meetsTarget
+                        ? AppTheme.internationalOrange
+                        : AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Status icon
+                if (hasData && target != '-')
+                  Icon(
+                    meetsTarget ? Icons.check_circle : Icons.warning,
+                    color: meetsTarget ? Colors.green : AppTheme.internationalOrange,
+                    size: 16,
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

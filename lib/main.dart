@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/core/app_lifecycle_observer.dart';
+import 'package:wingtip/core/performance_metrics_service.dart';
 import 'package:wingtip/core/restart_widget.dart';
 import 'package:wingtip/features/camera/camera_screen.dart';
 import 'package:wingtip/features/camera/camera_service.dart';
@@ -55,6 +57,15 @@ void main() async {
     // Performance logging: Cold start time
     final coldStartTime = DateTime.now().difference(appStartTime);
     debugPrint('[Performance] Cold start completed in ${coldStartTime.inMilliseconds}ms');
+
+    // Record cold start time to metrics
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final metricsService = PerformanceMetricsService(prefs);
+      await metricsService.recordColdStart(coldStartTime.inMilliseconds);
+    } catch (e) {
+      debugPrint('[Performance] Failed to record cold start metric: $e');
+    }
 
     if (cameraService.initializationDuration != null) {
       debugPrint('[Performance] Camera initialization took ${cameraService.initializationDuration!.inMilliseconds}ms');

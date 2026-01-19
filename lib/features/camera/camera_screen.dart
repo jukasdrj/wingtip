@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wingtip/core/performance_metrics_provider.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
 import 'package:wingtip/features/camera/image_processor.dart';
@@ -181,6 +182,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   Future<void> _onShutterTap() async {
+    // Start shutter latency timer
+    final shutterStartTime = DateTime.now();
+
     // Trigger haptic feedback immediately
     HapticFeedback.lightImpact();
 
@@ -208,6 +212,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
       // Capture image
       final XFile image = await cameraService.controller!.takePicture();
+
+      // Record shutter latency (time from tap to image captured)
+      final shutterLatency = DateTime.now().difference(shutterStartTime);
+      try {
+        final metricsService = ref.read(performanceMetricsServiceProvider);
+        await metricsService.recordShutterLatency(shutterLatency.inMilliseconds);
+      } catch (e) {
+        debugPrint('[CameraScreen] Failed to record shutter latency: $e');
+      }
+
       debugPrint('[CameraScreen] Image captured: ${image.path}');
 
       // Process image in background isolate

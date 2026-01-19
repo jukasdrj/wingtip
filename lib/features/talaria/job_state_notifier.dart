@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/error_messages.dart';
 import 'package:wingtip/core/failed_scans_directory.dart';
 import 'package:wingtip/core/failure_categorizer.dart';
+import 'package:wingtip/core/performance_metrics_provider.dart';
 import 'package:wingtip/core/sse_client.dart';
 import 'package:wingtip/core/sse_client_provider.dart';
 import 'package:wingtip/core/talaria_client_provider.dart';
@@ -106,13 +107,14 @@ class JobStateNotifier extends Notifier<JobState> {
       debugPrint('  - Job ID: ${response.jobId}');
       debugPrint('  - Stream URL: ${response.streamUrl}');
 
-      // Update job to listening state
+      // Update job to listening state with timestamp
       _updateJob(
         job.id,
         job.copyWith(
           jobId: response.jobId,
           streamUrl: response.streamUrl,
           status: JobStatus.listening,
+          sseListeningStartedAt: DateTime.now(),
         ),
       );
 
@@ -238,20 +240,33 @@ class JobStateNotifier extends Notifier<JobState> {
       // Get TalariaClient from provider
       final client = await ref.read(talariaClientProvider.future);
 
+      // Track upload time
+      final uploadStartTime = DateTime.now();
+
       // Upload to Talaria
       final response = await client.uploadImage(imagePath);
+
+      // Record upload time
+      final uploadDuration = DateTime.now().difference(uploadStartTime);
+      try {
+        final metricsService = ref.read(performanceMetricsServiceProvider);
+        await metricsService.recordUploadTime(uploadDuration.inMilliseconds);
+      } catch (e) {
+        debugPrint('[JobStateNotifier] Failed to record upload time: $e');
+      }
 
       debugPrint('[JobStateNotifier] Upload successful for job ${job.id}:');
       debugPrint('  - Job ID: ${response.jobId}');
       debugPrint('  - Stream URL: ${response.streamUrl}');
 
-      // Update job to listening state
+      // Update job to listening state with timestamp
       _updateJob(
         job.id,
         job.copyWith(
           jobId: response.jobId,
           streamUrl: response.streamUrl,
           status: JobStatus.listening,
+          sseListeningStartedAt: DateTime.now(),
         ),
       );
 
@@ -548,6 +563,18 @@ class JobStateNotifier extends Notifier<JobState> {
         // Intermediate result - save to database and update state
         final resultData = event.data;
         debugPrint('[JobStateNotifier] Received result for job $jobId: $resultData');
+
+        // Track SSE first result time if this is the first result for this job
+        if (job.result == null && job.sseListeningStartedAt != null) {
+          final sseFirstResultDuration = DateTime.now().difference(job.sseListeningStartedAt!);
+          try {
+            final metricsService = ref.read(performanceMetricsServiceProvider);
+            await metricsService.recordSseFirstResultTime(sseFirstResultDuration.inMilliseconds);
+          } catch (e) {
+            debugPrint('[JobStateNotifier] Failed to record SSE first result time: $e');
+          }
+        }
+
         await _saveBookResult(resultData, serverJobId);
         _updateJob(
           jobId,
