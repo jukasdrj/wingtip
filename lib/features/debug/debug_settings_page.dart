@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/device_id_provider.dart';
+import 'package:wingtip/widgets/error_snack_bar.dart';
 
 /// Debug settings page with options to view and regenerate the device ID.
 class DebugSettingsPage extends ConsumerWidget {
@@ -32,6 +33,24 @@ class DebugSettingsPage extends ConsumerWidget {
                 'Error: $error',
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
+            ),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Test Error Snackbar',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () {
+                ErrorSnackBar.show(
+                  context,
+                  message: 'This is a test error message',
+                );
+              },
+              icon: const Icon(Icons.error_outline),
+              label: const Text('Show Error Snackbar'),
             ),
           ],
         ),
