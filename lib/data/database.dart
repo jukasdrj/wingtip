@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
+import '../features/library/sort_options.dart';
 
 part 'database.g.dart';
 
@@ -176,49 +177,150 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  // Helper method to build ORDER BY terms based on sort option
+  List<OrderingTerm Function($BooksTable)> _buildOrderByTerms({
+    required SortOption sortOption,
+    bool sortReviewFirst = false,
+  }) {
+    final terms = <OrderingTerm Function($BooksTable)>[];
+
+    // Add review needed sorting if enabled
+    if (sortReviewFirst) {
+      terms.add((t) => OrderingTerm.desc(t.reviewNeeded));
+    }
+
+    // Add main sort option
+    switch (sortOption) {
+      case SortOption.dateAddedNewest:
+        terms.add((t) => OrderingTerm.desc(t.addedDate));
+        break;
+      case SortOption.dateAddedOldest:
+        terms.add((t) => OrderingTerm.asc(t.addedDate));
+        break;
+      case SortOption.titleAZ:
+        terms.add((t) => OrderingTerm.asc(t.title));
+        break;
+      case SortOption.titleZA:
+        terms.add((t) => OrderingTerm.desc(t.title));
+        break;
+      case SortOption.authorAZ:
+        terms.add((t) => OrderingTerm.asc(t.author));
+        break;
+      case SortOption.authorZA:
+        terms.add((t) => OrderingTerm.desc(t.author));
+        break;
+      case SortOption.spineConfidenceHigh:
+        // NULLS LAST for descending confidence
+        terms.add((t) => OrderingTerm(
+          expression: t.spineConfidence,
+          mode: OrderingMode.desc,
+        ));
+        break;
+      case SortOption.spineConfidenceLow:
+        // NULLS LAST for ascending confidence
+        terms.add((t) => OrderingTerm(
+          expression: t.spineConfidence,
+          mode: OrderingMode.asc,
+        ));
+        break;
+    }
+
+    return terms;
+  }
+
+  // Helper method to build SQL ORDER BY clause for custom queries
+  String _buildSqlOrderByClause({
+    required SortOption sortOption,
+    bool sortReviewFirst = false,
+  }) {
+    final clauses = <String>[];
+
+    if (sortReviewFirst) {
+      clauses.add('b.review_needed DESC');
+    }
+
+    switch (sortOption) {
+      case SortOption.dateAddedNewest:
+        clauses.add('b.added_date DESC');
+        break;
+      case SortOption.dateAddedOldest:
+        clauses.add('b.added_date ASC');
+        break;
+      case SortOption.titleAZ:
+        clauses.add('b.title COLLATE NOCASE ASC');
+        break;
+      case SortOption.titleZA:
+        clauses.add('b.title COLLATE NOCASE DESC');
+        break;
+      case SortOption.authorAZ:
+        clauses.add('b.author COLLATE NOCASE ASC');
+        break;
+      case SortOption.authorZA:
+        clauses.add('b.author COLLATE NOCASE DESC');
+        break;
+      case SortOption.spineConfidenceHigh:
+        clauses.add('b.spine_confidence DESC NULLS LAST');
+        break;
+      case SortOption.spineConfidenceLow:
+        clauses.add('b.spine_confidence ASC NULLS LAST');
+        break;
+    }
+
+    return 'ORDER BY ${clauses.join(', ')}';
+  }
+
   // Query all books ordered by added date descending
-  Stream<List<Book>> watchAllBooks({bool? reviewNeeded, bool sortReviewFirst = false}) {
+  Stream<List<Book>> watchAllBooks({
+    bool? reviewNeeded,
+    bool sortReviewFirst = false,
+    SortOption sortOption = SortOption.dateAddedNewest,
+  }) {
     final query = select(books);
 
     if (reviewNeeded != null) {
       query.where((t) => t.reviewNeeded.equals(reviewNeeded));
     }
 
-    if (sortReviewFirst) {
-      query.orderBy([
-        (t) => OrderingTerm.desc(t.reviewNeeded),
-        (t) => OrderingTerm.desc(t.addedDate),
-      ]);
-    } else {
-      query.orderBy([(t) => OrderingTerm.desc(t.addedDate)]);
-    }
+    query.orderBy(_buildOrderByTerms(
+      sortOption: sortOption,
+      sortReviewFirst: sortReviewFirst,
+    ));
 
     return query.watch();
   }
 
-  Future<List<Book>> getAllBooks({bool? reviewNeeded, bool sortReviewFirst = false}) {
+  Future<List<Book>> getAllBooks({
+    bool? reviewNeeded,
+    bool sortReviewFirst = false,
+    SortOption sortOption = SortOption.dateAddedNewest,
+  }) {
     final query = select(books);
 
     if (reviewNeeded != null) {
       query.where((t) => t.reviewNeeded.equals(reviewNeeded));
     }
 
-    if (sortReviewFirst) {
-      query.orderBy([
-        (t) => OrderingTerm.desc(t.reviewNeeded),
-        (t) => OrderingTerm.desc(t.addedDate),
-      ]);
-    } else {
-      query.orderBy([(t) => OrderingTerm.desc(t.addedDate)]);
-    }
+    query.orderBy(_buildOrderByTerms(
+      sortOption: sortOption,
+      sortReviewFirst: sortReviewFirst,
+    ));
 
     return query.get();
   }
 
   // Search books using FTS5
-  Stream<List<Book>> searchBooks(String query, {bool? reviewNeeded, bool sortReviewFirst = false}) {
+  Stream<List<Book>> searchBooks(
+    String query, {
+    bool? reviewNeeded,
+    bool sortReviewFirst = false,
+    SortOption sortOption = SortOption.dateAddedNewest,
+  }) {
     if (query.isEmpty) {
-      return watchAllBooks(reviewNeeded: reviewNeeded, sortReviewFirst: sortReviewFirst);
+      return watchAllBooks(
+        reviewNeeded: reviewNeeded,
+        sortReviewFirst: sortReviewFirst,
+        sortOption: sortOption,
+      );
     }
 
     // Escape special FTS5 characters and prepare query
@@ -235,9 +337,10 @@ class AppDatabase extends _$AppDatabase {
         : 'WHERE books_fts MATCH ?';
 
     // Build ORDER BY clause
-    final orderByClause = sortReviewFirst
-        ? 'ORDER BY b.review_needed DESC, b.added_date DESC'
-        : 'ORDER BY b.added_date DESC';
+    final orderByClause = _buildSqlOrderByClause(
+      sortOption: sortOption,
+      sortReviewFirst: sortReviewFirst,
+    );
 
     // Build variables list
     final variables = reviewNeeded != null
@@ -257,9 +360,18 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  Future<List<Book>> searchBooksOnce(String query, {bool? reviewNeeded, bool sortReviewFirst = false}) {
+  Future<List<Book>> searchBooksOnce(
+    String query, {
+    bool? reviewNeeded,
+    bool sortReviewFirst = false,
+    SortOption sortOption = SortOption.dateAddedNewest,
+  }) {
     if (query.isEmpty) {
-      return getAllBooks(reviewNeeded: reviewNeeded, sortReviewFirst: sortReviewFirst);
+      return getAllBooks(
+        reviewNeeded: reviewNeeded,
+        sortReviewFirst: sortReviewFirst,
+        sortOption: sortOption,
+      );
     }
 
     final escapedQuery = query
@@ -274,9 +386,10 @@ class AppDatabase extends _$AppDatabase {
         : 'WHERE books_fts MATCH ?';
 
     // Build ORDER BY clause
-    final orderByClause = sortReviewFirst
-        ? 'ORDER BY b.review_needed DESC, b.added_date DESC'
-        : 'ORDER BY b.added_date DESC';
+    final orderByClause = _buildSqlOrderByClause(
+      sortOption: sortOption,
+      sortReviewFirst: sortReviewFirst,
+    );
 
     // Build variables list
     final variables = reviewNeeded != null

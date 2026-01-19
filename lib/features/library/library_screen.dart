@@ -15,6 +15,7 @@ import '../../features/talaria/job_state_provider.dart';
 import 'library_provider.dart';
 import 'book_detail_screen.dart';
 import 'edit_book_screen.dart';
+import 'sort_options.dart';
 import 'widgets/empty_library_state.dart';
 import 'widgets/failed_scan_card.dart' as failed_card;
 
@@ -48,6 +49,56 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 
   void _onSearchChanged() {
     ref.read(searchQueryProvider.notifier).setQuery(_searchController.text);
+  }
+
+  void _showSortOptions(BuildContext context) {
+    HapticFeedback.lightImpact();
+
+    final sortOptionAsync = ref.read(sortOptionProvider);
+    final currentOption = sortOptionAsync.when(
+      data: (option) => option,
+      loading: () => SortOption.dateAddedNewest,
+      error: (_, stack) => SortOption.dateAddedNewest,
+    );
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoActionSheet(
+        title: const Text('Sort By'),
+        actions: SortOption.values.map((option) {
+          final isSelected = option == currentOption;
+          return CupertinoActionSheetAction(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context);
+              ref.read(sortOptionProvider.notifier).setSortOption(option);
+            },
+            isDefaultAction: isSelected,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(option.label),
+                if (isSelected) ...[
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.check,
+                    size: 18,
+                    color: AppTheme.internationalOrange,
+                  ),
+                ],
+              ],
+            ),
+          );
+        }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
   }
 
   Future<void> _showDeleteConfirmation(BuildContext context, int count) async {
@@ -498,6 +549,37 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                     },
                   ),
                 ),
+                const SizedBox(width: 8),
+                // Sort Options
+                Consumer(
+                  builder: (context, ref, child) {
+                    final sortOptionAsync = ref.watch(sortOptionProvider);
+                    final sortOption = sortOptionAsync.when(
+                      data: (option) => option,
+                      loading: () => SortOption.dateAddedNewest,
+                      error: (_, stack) => SortOption.dateAddedNewest,
+                    );
+
+                    return OutlinedButton(
+                      onPressed: () => _showSortOptions(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: sortOption != SortOption.dateAddedNewest
+                            ? AppTheme.internationalOrange
+                            : AppTheme.textSecondary,
+                        side: BorderSide(
+                          color: sortOption != SortOption.dateAddedNewest
+                              ? AppTheme.internationalOrange
+                              : AppTheme.borderGray,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      child: const Icon(
+                        Icons.swap_vert,
+                        size: 16,
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -534,42 +616,62 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   );
                 }
 
-                return RefreshIndicator(
-                  onRefresh: _refreshLibrary,
-                  color: AppTheme.internationalOrange,
-                  backgroundColor: AppTheme.borderGray,
-                  child: GridView.builder(
-            padding: const EdgeInsets.all(16),
-            // Enable iOS ProMotion scroll physics
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 1 / 1.5,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: books.length,
-            itemBuilder: (context, index) {
-              final book = books[index];
-              final isNew = !_seenBookIsbns.contains(book.isbn);
+                // Get current sort option to use as key for AnimatedSwitcher
+                final sortOptionAsync = ref.watch(sortOptionProvider);
+                final sortOption = sortOptionAsync.when(
+                  data: (option) => option,
+                  loading: () => SortOption.dateAddedNewest,
+                  error: (_, stack) => SortOption.dateAddedNewest,
+                );
 
-              // Mark this book as seen
-              if (isNew) {
-                _seenBookIsbns.add(book.isbn);
-              }
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeOutCubic,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: child,
+                    );
+                  },
+                  child: RefreshIndicator(
+                    key: ValueKey(sortOption), // Key changes when sort changes
+                    onRefresh: _refreshLibrary,
+                    color: AppTheme.internationalOrange,
+                    backgroundColor: AppTheme.borderGray,
+                    child: GridView.builder(
+                      padding: const EdgeInsets.all(16),
+                      // Enable iOS ProMotion scroll physics
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 1 / 1.5,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
+                      itemCount: books.length,
+                      itemBuilder: (context, index) {
+                        final book = books[index];
+                        final isNew = !_seenBookIsbns.contains(book.isbn);
 
-              // Wrap each item in RepaintBoundary for 120fps scroll
-              return RepaintBoundary(
-                child: AnimatedBookCard(
-                  key: ValueKey(book.isbn),
-                  book: book,
-                  isNew: isNew,
-                ),
-              );
-            },
-          ),
+                        // Mark this book as seen
+                        if (isNew) {
+                          _seenBookIsbns.add(book.isbn);
+                        }
+
+                        // Wrap each item in RepaintBoundary for 120fps scroll
+                        return RepaintBoundary(
+                          child: AnimatedBookCard(
+                            key: ValueKey(book.isbn),
+                            book: book,
+                            isNew: isNew,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 );
               },
               loading: () => const Center(

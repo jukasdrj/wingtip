@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/database.dart';
 import '../../data/database_provider.dart';
+import 'sort_options.dart';
+import 'sort_service.dart';
 
 // Search query notifier
 class SearchQueryNotifier extends Notifier<String> {
@@ -52,17 +55,51 @@ final sortReviewFirstProvider = NotifierProvider<SortReviewFirstNotifier, bool>(
   SortReviewFirstNotifier.new,
 );
 
+// Sort service provider
+final sortServiceProvider = FutureProvider<SortService>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  return SortService(prefs);
+});
+
+// Sort option notifier
+class SortOptionNotifier extends AsyncNotifier<SortOption> {
+  @override
+  Future<SortOption> build() async {
+    final sortService = await ref.watch(sortServiceProvider.future);
+    return sortService.sortOption;
+  }
+
+  Future<void> setSortOption(SortOption option) async {
+    final sortService = await ref.read(sortServiceProvider.future);
+    await sortService.setSortOption(option);
+    state = AsyncValue.data(option);
+  }
+}
+
+final sortOptionProvider = AsyncNotifierProvider<SortOptionNotifier, SortOption>(
+  SortOptionNotifier.new,
+);
+
 // Books provider that reacts to search query, filter, and sort
 final booksProvider = StreamProvider<List<Book>>((ref) {
   final database = ref.watch(databaseProvider);
   final searchQuery = ref.watch(searchQueryProvider);
   final reviewNeededFilter = ref.watch(reviewNeededFilterProvider);
   final sortReviewFirst = ref.watch(sortReviewFirstProvider);
+  final sortOptionAsync = ref.watch(sortOptionProvider);
+
+  // Use the sort option value when available, otherwise use default
+  final sortOption = sortOptionAsync.when(
+    data: (option) => option,
+    loading: () => SortOption.dateAddedNewest,
+    error: (_, stack) => SortOption.dateAddedNewest,
+  );
 
   return database.searchBooks(
     searchQuery,
     reviewNeeded: reviewNeededFilter,
     sortReviewFirst: sortReviewFirst,
+    sortOption: sortOption,
   );
 });
 
