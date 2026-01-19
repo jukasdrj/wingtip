@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,9 +6,11 @@ import '../../core/theme.dart';
 import '../../data/database.dart';
 import '../../data/database_provider.dart';
 import '../../data/failed_scans_repository.dart';
+import '../../features/talaria/job_state_provider.dart';
 import 'library_provider.dart';
 import 'book_detail_bottom_sheet.dart';
 import 'widgets/empty_library_state.dart';
+import 'widgets/failed_scan_card.dart' as failed_card;
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -369,18 +370,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           );
         }
 
-        return GridView.builder(
+        return ListView.separated(
           padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 1 / 1.5,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
           itemCount: scans.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final scan = scans[index];
-            return FailedScanCard(scan: scan);
+            return failed_card.FailedScanCard(
+              failedScan: scan,
+              onRetry: () async {
+                // Trigger retry via JobStateNotifier
+                await ref.read(jobStateProvider.notifier).retryFailedScan(scan.jobId);
+              },
+              onDelete: () async {
+                // Delete the failed scan
+                await ref.read(failedScansRepositoryProvider).deleteFailedScan(scan.id);
+              },
+            );
           },
         );
       },
@@ -622,76 +628,3 @@ class BookCard extends ConsumerWidget {
   }
 }
 
-class FailedScanCard extends StatelessWidget {
-  final FailedScan scan;
-
-  const FailedScanCard({super.key, required this.scan});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        // TODO: Implement retry or view details in future user stories
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: AppTheme.internationalOrange,
-            width: 1,
-          ),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: AspectRatio(
-            aspectRatio: 1 / 1.5,
-            child: Stack(
-              children: [
-                // Display the failed scan image if it exists
-                if (File(scan.imagePath).existsSync())
-                  Image.file(
-                    File(scan.imagePath),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
-                  )
-                else
-                  _buildErrorPlaceholder(),
-                // Error indicator overlay
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: const BoxDecoration(
-                      color: AppTheme.internationalOrange,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.error,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorPlaceholder() {
-    return Container(
-      color: AppTheme.borderGray,
-      child: Center(
-        child: Icon(
-          Icons.broken_image,
-          size: 48,
-          color: AppTheme.textSecondary,
-        ),
-      ),
-    );
-  }
-}

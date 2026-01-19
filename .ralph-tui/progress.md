@@ -9,3 +9,66 @@ after each iteration and included in agent prompts for context.
 
 ---
 
+## ✓ Iteration 1 - US-131: Save Failed Scans to Database
+*2026-01-19T04:25:46.112Z (194s)*
+
+**Status:** Completed
+
+**Notes:**
+ror handling with debug logging included\n\n3. **Tests**\n   - Added 4 comprehensive tests to database_test.dart verifying the saveFailedScan method\n   - Added 5 tests to job_state_notifier_test.dart for failed scan persistence integration\n   - All tests verify timestamps, retention periods, multiple scans, and error message handling\n\n### Quality Checks:\n- ✅ flutter analyze: No issues found\n- ✅ flutter test: All relevant tests pass (47/47)\n- ✅ Commit created with proper message format\n\n
+
+---
+## ✓ Iteration 2 - US-132: Failed Scans Repository Layer
+*2026-01-19T04:28:37.896Z (171s)*
+
+**Status:** Completed
+
+**Notes:**
+r` - streams all failed scans for UI consumption\n\n**Comprehensive Testing:**\n- Created `test/data/failed_scans_repository_test.dart` with 14 test cases\n- Tests cover all methods with edge cases (empty data, non-existent IDs, multiple records)\n- All tests passing\n\n### Quality Checks\n- `flutter analyze` - No errors\n- `flutter test test/data/` - All 34 data layer tests passing (20 existing + 14 new)\n\n### Commit\n- Committed with message: `feat: US-132 - Failed Scans Repository Layer`\n\n
+
+---
+## ✓ Iteration 3 - US-133: Preserve Images for Failed Scans
+*2026-01-19T04:33:03.756Z (265s)*
+
+**Status:** Completed
+
+**Notes:**
+anual delete\n\n### All Acceptance Criteria Met:\n- ✅ When scan fails, move image from temp directory to persistent `app_documents/failed_scans/`\n- ✅ Filename format: `{jobId}.jpg` for easy lookup\n- ✅ Cleanup logic skips deletion for failed scans\n- ✅ On successful retry: delete image from failed_scans directory\n- ✅ On manual delete: remove both database entry and image file\n- ✅ flutter analyze shows no errors\n- ✅ Committed with message: `feat: US-133 - Preserve Images for Failed Scans`\n\n
+
+---
+## ✓ Iteration 4 - US-134: Handle Network Upload Failures
+*2026-01-19T04:37:31.352Z (267s)*
+
+**Status:** Completed
+
+**Notes:**
+mapping\n   - TimeoutException → \"Upload timed out after 30s\" mapping\n   - Failed scan persistence for network errors\n   - Failed scan persistence for timeouts\n   - Failed scan persistence for server unreachable\n   - Multiple network failures handling\n\n### Quality Checks\n- ✅ `flutter analyze` shows no errors\n- ✅ All tests pass (32/32 in job_state_notifier_test.dart)\n- ✅ Follows existing code patterns and architecture\n- ✅ Maintains iOS-first design philosophy with haptic feedback\n\n
+
+---
+## ✓ Iteration 5 - US-135: Handle Backend No Books Found Response
+*2026-01-19T04:42:21.426Z (289s)*
+
+**Status:** Completed
+
+**Notes:**
+s:\n✅ `flutter analyze` - No issues found  \n✅ `flutter test` - All 41 tests in job_state_notifier_test.dart passing  \n✅ Git commit created with proper message format\n\n### Retry Capability:\nThe retry infrastructure is in place through:\n- Failed scan record in database with preserved jobId and imagePath\n- Image stored in persistent failed_scans directory\n- `retryFailedScan()` method in FailedScansRepository\n- Retry UI will be implemented in future user stories (US-136, US-137, US-140)\n\n
+
+---
+## ✓ Iteration 6 - US-136: Failed Scans Tab in Library
+*2026-01-19T04:46:26.767Z (244s)*
+
+**Status:** Completed
+
+**Notes:**
+s missing images with a broken image placeholder\n\n✅ **Empty State** - When no failed scans exist, shows a centered message with:\n  - Checkmark icon\n  - \"No failed scans\" text\n\n✅ **Quality Checks** - `flutter analyze` passes with no errors\n\n✅ **Commit Created** - feat: US-136 - Failed Scans Tab in Library\n\nThe implementation preserves all existing functionality on the All Books tab (search, filters, sorting) while adding the new Failed Scans tab for reviewing failed scan attempts.\n\n
+
+---
+## ✓ Iteration 7 - US-137: Failed Scan Card UI
+*2026-01-19T04:48:00.145Z (92s)*
+
+**Status:** Completed
+
+**Notes:**
+white text\n   - **Delete button** - Gray outlined style (`borderGray` border with `textSecondary` color)\n   - Both buttons include haptic feedback on tap\n\n6. **Design Consistency**:\n   - Zero elevation (following Swiss Utility design)\n   - OLED black background\n   - Proper spacing and typography using theme styles\n   - Rounded corners (8px border radius)\n\n### Quality Checks\n\n- `flutter analyze` passed with no issues\n- Committed with message: `feat: US-137 - Failed Scan Card UI`\n\n
+
+---

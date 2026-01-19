@@ -38,6 +38,112 @@ class JobStateNotifier extends Notifier<JobState> {
     return JobState.idle();
   }
 
+  /// Retry a failed scan by job ID
+  ///
+  /// Reads the image from failed_scans directory and re-uploads it
+  Future<void> retryFailedScan(String failedScanJobId) async {
+    ScanJob? job;
+    String? imagePath;
+
+    try {
+      debugPrint('[JobStateNotifier] Retrying failed scan: $failedScanJobId');
+
+      // Get the failed scan from database
+      final database = ref.read(databaseProvider);
+      final failedScan = await database.getFailedScan(failedScanJobId);
+
+      if (failedScan == null) {
+        debugPrint('[JobStateNotifier] Failed scan not found: $failedScanJobId');
+        return;
+      }
+
+      // Store image path for error handlers
+      imagePath = failedScan.imagePath;
+
+      // Verify image exists
+      final imageFile = File(imagePath);
+      if (!await imageFile.exists()) {
+        debugPrint('[JobStateNotifier] Image file not found: $imagePath');
+        // Update error message
+        await database.saveFailedScan(
+          jobId: failedScanJobId,
+          imagePath: imagePath,
+          errorMessage: 'Image file missing - cannot retry',
+        );
+        return;
+      }
+
+      debugPrint('[JobStateNotifier] Uploading image for retry: $imagePath');
+
+      // Create new job in uploading state
+      job = ScanJob.uploading(imagePath);
+
+      // Add job to queue
+      state = state.copyWith(
+        jobs: [...state.jobs, job],
+      );
+
+      debugPrint('[JobStateNotifier] Created retry job ${job.id}: $imagePath');
+
+      // Get TalariaClient from provider
+      final client = await ref.read(talariaClientProvider.future);
+
+      // Upload to Talaria
+      final response = await client.uploadImage(imagePath);
+
+      debugPrint('[JobStateNotifier] Upload successful for retry job ${job.id}:');
+      debugPrint('  - Job ID: ${response.jobId}');
+      debugPrint('  - Stream URL: ${response.streamUrl}');
+
+      // Update job to listening state
+      _updateJob(
+        job.id,
+        job.copyWith(
+          jobId: response.jobId,
+          streamUrl: response.streamUrl,
+          status: JobStatus.listening,
+        ),
+      );
+
+      // Start listening to SSE stream
+      // Use the original failedScanJobId for cleanup tracking
+      await _listenToStream(job.id, failedScanJobId, response.streamUrl);
+    } on DioException catch (e) {
+      debugPrint('[JobStateNotifier] DioException during retry upload: ${e.type}');
+      await _handleRetryError(e, job, imagePath ?? '', failedScanJobId);
+    } on SocketException catch (e) {
+      debugPrint('[JobStateNotifier] SocketException during retry upload: $e');
+      await _handleRetryError(e, job, imagePath ?? '', failedScanJobId);
+    } on TimeoutException catch (e) {
+      debugPrint('[JobStateNotifier] TimeoutException during retry upload: $e');
+      await _handleRetryError(e, job, imagePath ?? '', failedScanJobId);
+    } catch (e) {
+      debugPrint('[JobStateNotifier] Retry upload failed: $e');
+
+      // Check if this is a rate limit exception
+      if (e.toString().contains('RateLimitException')) {
+        _handleRateLimitError(e);
+      } else {
+        // Trigger error haptic feedback
+        HapticFeedback.heavyImpact();
+
+        // Update the job to error state if it exists
+        if (job != null) {
+          _updateJob(
+            job.id,
+            job.copyWith(
+              status: JobStatus.error,
+              errorMessage: e.toString(),
+            ),
+          );
+        }
+
+        // Update the failed scan with new error info
+        await _updateFailedScanError(failedScanJobId, e.toString());
+      }
+    }
+  }
+
   /// Upload an image to Talaria for analysis
   ///
   /// Adds a new job to the queue and starts processing
@@ -145,6 +251,83 @@ class JobStateNotifier extends Notifier<JobState> {
       debugPrint('[JobStateNotifier] Rate limit expired, clearing');
       state = state.clearRateLimit();
     });
+  }
+
+  /// Handle retry upload errors
+  ///
+  /// Updates the existing failed scan entry with new error information
+  Future<void> _handleRetryError(
+    dynamic error,
+    ScanJob? job,
+    String imagePath,
+    String failedScanJobId,
+  ) async {
+    // Trigger error haptic feedback
+    HapticFeedback.heavyImpact();
+
+    // Map exception to user-friendly error message
+    String errorMessage;
+
+    if (error is DioException) {
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          errorMessage = 'Upload timed out after 30s';
+        case DioExceptionType.connectionError:
+          errorMessage = 'Server unreachable';
+        case DioExceptionType.badResponse:
+          errorMessage = 'Server error: ${error.response?.statusCode ?? "unknown"}';
+        case DioExceptionType.cancel:
+          errorMessage = 'Upload cancelled';
+        default:
+          errorMessage = 'No internet connection';
+      }
+    } else if (error is SocketException) {
+      errorMessage = 'No internet connection';
+    } else if (error is TimeoutException) {
+      errorMessage = 'Upload timed out after 30s';
+    } else {
+      errorMessage = error.toString();
+    }
+
+    debugPrint('[JobStateNotifier] Retry error: $errorMessage');
+
+    // Update job to error state if it exists
+    if (job != null) {
+      _updateJob(
+        job.id,
+        job.copyWith(
+          status: JobStatus.error,
+          errorMessage: errorMessage,
+        ),
+      );
+    }
+
+    // Update the failed scan with new error information
+    await _updateFailedScanError(failedScanJobId, errorMessage);
+  }
+
+  /// Update a failed scan entry with new error message
+  Future<void> _updateFailedScanError(String jobId, String errorMessage) async {
+    try {
+      final database = ref.read(databaseProvider);
+      final failedScan = await database.getFailedScan(jobId);
+
+      if (failedScan != null) {
+        // Prepend retry attempt info to error message
+        final updatedMessage = 'Retry failed: $errorMessage';
+
+        await database.saveFailedScan(
+          jobId: jobId,
+          imagePath: failedScan.imagePath,
+          errorMessage: updatedMessage,
+        );
+        debugPrint('[JobStateNotifier] Updated failed scan error: $jobId');
+      }
+    } catch (e) {
+      debugPrint('[JobStateNotifier] Failed to update failed scan error: $e');
+    }
   }
 
   /// Handle network upload errors
