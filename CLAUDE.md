@@ -71,7 +71,7 @@ flutter pub run flutter_native_splash:create
 ### State Management Pattern
 This app uses **Riverpod 3.x** for all state management:
 
-- Providers are defined using the generator syntax with annotations
+- Providers are defined manually (note: generator packages `riverpod_annotation`/`riverpod_generator` not yet added)
 - UI components use `ConsumerWidget` or `Consumer` to access providers
 - Business logic lives in Notifier classes (e.g., `JobStateNotifier`)
 - Database streams are exposed via `StreamProvider`
@@ -116,6 +116,8 @@ This app uses **Riverpod 3.x** for all state management:
 ### API Integration
 
 **Base URL:** Not hardcoded - configured via `NetworkClient(baseUrl: ...)`
+
+**Network Stack:** Uses standard `http` package for HTTP requests and SSE event streaming (not `fetch_client`)
 
 **Headers:**
 - `X-Device-ID: <uuid>` on all requests
