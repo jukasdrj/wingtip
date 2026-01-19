@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wingtip/core/device_id_provider.dart';
+import 'package:wingtip/data/failed_scans_repository.dart';
 import 'package:wingtip/services/csv_export_service_provider.dart';
+import 'package:wingtip/services/failed_scan_retention_service.dart';
 import 'package:wingtip/widgets/error_snack_bar.dart';
 
 /// Debug settings page with options to view and regenerate the device ID.
@@ -95,6 +97,15 @@ class DebugSettingsPage extends ConsumerWidget {
               icon: const Icon(Icons.error_outline),
               label: const Text('Show Error Snackbar'),
             ),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Failed Scan Retention',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            const _FailedScanRetentionSection(),
             const SizedBox(height: 32),
             const Divider(),
             const SizedBox(height: 16),
@@ -334,6 +345,176 @@ class _ImageCacheSectionState extends ConsumerState<_ImageCacheSection> {
                       )
                     : const Icon(Icons.delete_outline),
                 label: Text(_isClearing ? 'Clearing...' : 'Clear Image Cache'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FailedScanRetentionSection extends ConsumerStatefulWidget {
+  const _FailedScanRetentionSection();
+
+  @override
+  ConsumerState<_FailedScanRetentionSection> createState() =>
+      _FailedScanRetentionSectionState();
+}
+
+class _FailedScanRetentionSectionState
+    extends ConsumerState<_FailedScanRetentionSection> {
+  String _scanInfo = 'Calculating...';
+  bool _isClearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _calculateScanInfo();
+  }
+
+  Future<void> _calculateScanInfo() async {
+    try {
+      final repository = ref.read(failedScansRepositoryProvider);
+      final count = await repository.getFailedScansCount();
+      final size = await repository.getFailedScansStorageSize();
+
+      if (mounted) {
+        setState(() {
+          _scanInfo = 'Failed Scans: $count (using ${_formatBytes(size)})';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _scanInfo = 'Error calculating';
+        });
+      }
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  Future<void> _clearAllFailedScans() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Failed Scans?'),
+        content: const Text(
+          'This will permanently delete all failed scan images and records. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isClearing = true;
+    });
+
+    try {
+      final repository = ref.read(failedScansRepositoryProvider);
+      await repository.clearAllFailedScans();
+
+      await _calculateScanInfo();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All failed scans cleared'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ErrorSnackBar.show(
+          context,
+          message: 'Failed to clear scans: $e',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isClearing = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final retentionService = ref.watch(failedScanRetentionServiceProvider);
+    final currentRetention = retentionService.getRetention();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Retention Period',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                DropdownButton<FailedScanRetention>(
+                  value: currentRetention,
+                  items: FailedScanRetention.values.map((retention) {
+                    return DropdownMenuItem(
+                      value: retention,
+                      child: Text(retention.label),
+                    );
+                  }).toList(),
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await retentionService.setRetention(value);
+                      setState(() {});
+                    }
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _scanInfo,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isClearing ? null : _clearAllFailedScans,
+                icon: _isClearing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline),
+                label: Text(
+                    _isClearing ? 'Clearing...' : 'Clear All Failed Scans Now'),
               ),
             ),
           ],

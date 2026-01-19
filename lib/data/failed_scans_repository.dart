@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/failed_scans_directory.dart';
 import 'database.dart';
@@ -49,6 +50,40 @@ class FailedScansRepository {
         .getSingleOrNull();
 
     return scan;
+  }
+
+  /// Get the total number of failed scans
+  Future<int> getFailedScansCount() async {
+    final count = await _database.select(_database.failedScans).get();
+    return count.length;
+  }
+
+  /// Get the total storage size of all failed scan images
+  Future<int> getFailedScansStorageSize() async {
+    final scans = await _database.select(_database.failedScans).get();
+    int totalSize = 0;
+
+    for (final scan in scans) {
+      final file = File(scan.imagePath);
+      if (await file.exists()) {
+        totalSize += await file.length();
+      }
+    }
+
+    return totalSize;
+  }
+
+  /// Clear all failed scans (both database entries and image files)
+  Future<void> clearAllFailedScans() async {
+    final scans = await _database.select(_database.failedScans).get();
+
+    // Delete all image files
+    for (final scan in scans) {
+      await FailedScansDirectory.deleteImage(scan.jobId);
+    }
+
+    // Delete all database entries
+    await _database.delete(_database.failedScans).go();
   }
 }
 

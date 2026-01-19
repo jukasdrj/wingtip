@@ -72,3 +72,21 @@ s missing images with a broken image placeholder\n\n✅ **Empty State** - When n
 white text\n   - **Delete button** - Gray outlined style (`borderGray` border with `textSecondary` color)\n   - Both buttons include haptic feedback on tap\n\n6. **Design Consistency**:\n   - Zero elevation (following Swiss Utility design)\n   - OLED black background\n   - Proper spacing and typography using theme styles\n   - Rounded corners (8px border radius)\n\n### Quality Checks\n\n- `flutter analyze` passed with no issues\n- Committed with message: `feat: US-137 - Failed Scan Card UI`\n\n
 
 ---
+## ✓ Iteration 8 - US-140: Manual Retry Single Scan
+*2026-01-19T04:53:18.287Z (317s)*
+
+**Status:** Completed
+
+**Notes:**
+g patterns (SSE handling, error mapping, cleanup)\n   - ✅ Proper haptic feedback on retry errors\n   - ✅ Detailed debug logging for retry flow\n\n**Key Design Decisions:**\n\n- Retry jobs use the same processing queue as new scans for consistent UX\n- Original `failedScanJobId` is preserved for cleanup tracking (not the new server jobId)\n- Error messages are updated with retry context to help users understand multiple failures\n- Image path validation prevents retries when files are missing\n\n
+
+---
+## ✓ Iteration 9 - US-142: Auto-Cleanup Expired Failed Scans
+*2026-01-19T04:59:34.307Z (375s)*
+
+**Status:** Completed
+
+**Notes:**
+successfully with all auto-cleanup logic tests passing ✅\n\n### Files Created/Modified\n\n**Created:**\n- `lib/services/failed_scans_cleanup_service.dart` - Core cleanup logic\n- `lib/services/failed_scans_cleanup_service_provider.dart` - Riverpod provider\n- `lib/core/app_lifecycle_observer.dart` - Daily cleanup scheduler\n- `test/services/failed_scans_cleanup_service_test.dart` - Comprehensive tests\n\n**Modified:**\n- `lib/main.dart` - Integrated cleanup on startup and lifecycle observer\n\n
+
+---

@@ -160,12 +160,12 @@
         "Manual verification: Retry flow matches new scan behavior"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-137"
       ],
-      "completionNotes": ""
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-142",
@@ -181,12 +181,12 @@
         "flutter test runs successfully with auto-cleanup logic tests"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-140"
       ],
-      "completionNotes": ""
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-143",
@@ -448,7 +448,7 @@
   ],
   "metadata": {
     "createdAt": "2026-01-18T00:00:00.000Z",
-    "updatedAt": "2026-01-19T04:48:01.152Z",
+    "updatedAt": "2026-01-19T04:59:35.311Z",
     "epicNumber": 4,
     "totalStories": 20,
     "completedStories": 0,

@@ -13,6 +13,7 @@ import 'package:wingtip/core/talaria_client_provider.dart';
 import 'package:wingtip/data/database.dart';
 import 'package:wingtip/data/database_provider.dart';
 import 'package:wingtip/features/talaria/job_state.dart';
+import 'package:wingtip/services/failed_scan_retention_service.dart';
 
 /// Notifier for managing Talaria scan job state
 class JobStateNotifier extends Notifier<JobState> {
@@ -64,11 +65,17 @@ class JobStateNotifier extends Notifier<JobState> {
       final imageFile = File(imagePath);
       if (!await imageFile.exists()) {
         debugPrint('[JobStateNotifier] Image file not found: $imagePath');
+
+        // Get retention duration from settings
+        final retentionService = ref.read(failedScanRetentionServiceProvider);
+        final retentionDuration = retentionService.getRetentionDuration();
+
         // Update error message
         await database.saveFailedScan(
           jobId: failedScanJobId,
           imagePath: imagePath,
           errorMessage: 'Image file missing - cannot retry',
+          retentionPeriod: retentionDuration,
         );
         return;
       }
@@ -318,10 +325,15 @@ class JobStateNotifier extends Notifier<JobState> {
         // Prepend retry attempt info to error message
         final updatedMessage = 'Retry failed: $errorMessage';
 
+        // Get retention duration from settings
+        final retentionService = ref.read(failedScanRetentionServiceProvider);
+        final retentionDuration = retentionService.getRetentionDuration();
+
         await database.saveFailedScan(
           jobId: jobId,
           imagePath: failedScan.imagePath,
           errorMessage: updatedMessage,
+          retentionPeriod: retentionDuration,
         );
         debugPrint('[JobStateNotifier] Updated failed scan error: $jobId');
       }
@@ -592,11 +604,16 @@ class JobStateNotifier extends Notifier<JobState> {
       final persistentPath = await FailedScansDirectory.moveImage(imagePath, jobId);
       debugPrint('[JobStateNotifier] Moved failed scan image to: $persistentPath');
 
+      // Get retention duration from settings
+      final retentionService = ref.read(failedScanRetentionServiceProvider);
+      final retentionDuration = retentionService.getRetentionDuration();
+
       final database = ref.read(databaseProvider);
       await database.saveFailedScan(
         jobId: jobId,
         imagePath: persistentPath,
         errorMessage: errorMessage,
+        retentionPeriod: retentionDuration,
       );
       debugPrint('[JobStateNotifier] Failed scan saved: $jobId');
     } catch (e) {

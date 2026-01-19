@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wingtip/core/failed_scans_directory.dart';
 import 'package:wingtip/data/database.dart';
 import 'package:wingtip/services/failed_scans_cleanup_service.dart';
-import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
