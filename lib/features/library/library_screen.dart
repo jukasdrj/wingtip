@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -5,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../data/database.dart';
 import '../../data/database_provider.dart';
+import '../../data/failed_scans_repository.dart';
 import 'library_provider.dart';
 import 'book_detail_bottom_sheet.dart';
 import 'widgets/empty_library_state.dart';
@@ -16,18 +18,22 @@ class LibraryScreen extends ConsumerStatefulWidget {
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+class _LibraryScreenState extends ConsumerState<LibraryScreen>
+    with SingleTickerProviderStateMixin {
   final Set<String> _seenBookIsbns = {};
   final TextEditingController _searchController = TextEditingController();
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -91,8 +97,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final booksAsync = ref.watch(booksProvider);
+    final failedScansAsync = ref.watch(watchFailedScansProvider);
     final selectMode = ref.watch(selectModeProvider);
     final selectedBooks = ref.watch(selectedBooksProvider);
+
+    final failedScansCount = failedScansAsync.maybeWhen(
+      data: (scans) => scans.length,
+      orElse: () => 0,
+    );
 
     return Scaffold(
       backgroundColor: AppTheme.oledBlack,
@@ -117,19 +129,50 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ]
             : null,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            color: AppTheme.borderGray,
-            height: 1,
+          preferredSize: const Size.fromHeight(49),
+          child: Column(
+            children: [
+              TabBar(
+                controller: _tabController,
+                indicatorColor: AppTheme.internationalOrange,
+                labelColor: AppTheme.textPrimary,
+                unselectedLabelColor: AppTheme.textSecondary,
+                tabs: [
+                  const Tab(text: 'All Books'),
+                  Tab(
+                    text: failedScansCount > 0
+                        ? 'Failed ($failedScansCount)'
+                        : 'Failed',
+                  ),
+                ],
+              ),
+              Container(
+                color: AppTheme.borderGray,
+                height: 1,
+              ),
+            ],
           ),
         ),
       ),
-      body: Column(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          // Search TextField
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
+          // All Books Tab
+          _buildBooksTab(context, booksAsync),
+          // Failed Scans Tab
+          _buildFailedScansTab(context, failedScansAsync),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBooksTab(BuildContext context, AsyncValue<List<Book>> booksAsync) {
+    return Column(
+      children: [
+        // Search TextField
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
               controller: _searchController,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppTheme.textPrimary,
@@ -297,7 +340,62 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         ),
       ),
     ),
-        ],
+      ],
+    );
+  }
+
+  Widget _buildFailedScansTab(BuildContext context, AsyncValue<List<FailedScan>> failedScansAsync) {
+    return failedScansAsync.when(
+      data: (scans) {
+        if (scans.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 64,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No failed scans',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: 1 / 1.5,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: scans.length,
+          itemBuilder: (context, index) {
+            final scan = scans[index];
+            return FailedScanCard(scan: scan);
+          },
+        );
+      },
+      loading: () => const Center(
+        child: CircularProgressIndicator(
+          color: AppTheme.internationalOrange,
+        ),
+      ),
+      error: (error, stack) => Center(
+        child: Text(
+          'Error loading failed scans',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+        ),
       ),
     );
   }
@@ -519,6 +617,80 @@ class BookCard extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class FailedScanCard extends StatelessWidget {
+  final FailedScan scan;
+
+  const FailedScanCard({super.key, required this.scan});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        // TODO: Implement retry or view details in future user stories
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: AppTheme.internationalOrange,
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: AspectRatio(
+            aspectRatio: 1 / 1.5,
+            child: Stack(
+              children: [
+                // Display the failed scan image if it exists
+                if (File(scan.imagePath).existsSync())
+                  Image.file(
+                    File(scan.imagePath),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
+                  )
+                else
+                  _buildErrorPlaceholder(),
+                // Error indicator overlay
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.internationalOrange,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.error,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorPlaceholder() {
+    return Container(
+      color: AppTheme.borderGray,
+      child: Center(
+        child: Icon(
+          Icons.broken_image,
+          size: 48,
+          color: AppTheme.textSecondary,
+        ),
       ),
     );
   }
