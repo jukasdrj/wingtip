@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -131,7 +132,10 @@ class JobStateNotifier extends Notifier<JobState> {
           imagePath: imagePath,
           result: resultData,
         );
-        _sseSubscription?.cancel();
+        await _sseSubscription?.cancel();
+
+        // Perform cleanup
+        await _cleanupJob(jobId, imagePath);
 
       case SseEventType.error:
         // Job failed with error
@@ -210,6 +214,32 @@ class JobStateNotifier extends Notifier<JobState> {
       debugPrint('[JobStateNotifier] Cover image prefetched successfully');
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to prefetch cover image: $e');
+    }
+  }
+
+  /// Clean up resources after job completion
+  Future<void> _cleanupJob(String jobId, String imagePath) async {
+    try {
+      debugPrint('[JobStateNotifier] Starting cleanup for job: $jobId');
+
+      // Send cleanup request to server
+      final client = await ref.read(talariaClientProvider.future);
+      await client.cleanupJob(jobId);
+      debugPrint('[JobStateNotifier] Server cleanup successful');
+
+      // Delete local temporary file
+      final imageFile = File(imagePath);
+      if (await imageFile.exists()) {
+        await imageFile.delete();
+        debugPrint('[JobStateNotifier] Deleted temporary file: $imagePath');
+      } else {
+        debugPrint('[JobStateNotifier] Temporary file not found: $imagePath');
+      }
+
+      debugPrint('[JobStateNotifier] Cleanup completed successfully');
+    } catch (e) {
+      debugPrint('[JobStateNotifier] Cleanup failed: $e');
+      // Don't fail the job if cleanup fails - it's already completed
     }
   }
 

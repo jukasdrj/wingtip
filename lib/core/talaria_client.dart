@@ -55,4 +55,19 @@ class TalariaClient {
 
     return ScanJobResponse.fromJson(response.data as Map<String, dynamic>);
   }
+
+  /// Clean up resources for a completed job
+  ///
+  /// Sends DELETE request to /v3/jobs/scans/{jobId}/cleanup.
+  /// Throws [DioException] on network errors or non-2xx responses.
+  Future<void> cleanupJob(String jobId) async {
+    await _dio.delete(
+      '/v3/jobs/scans/$jobId/cleanup',
+      options: Options(
+        headers: {
+          'X-Device-ID': _deviceId,
+        },
+      ),
+    );
+  }
 }

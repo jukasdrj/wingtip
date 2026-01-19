@@ -89,6 +89,51 @@ void main() {
         await testFile.delete();
       });
     });
+
+    group('cleanupJob', () {
+      test('should send DELETE request to cleanup endpoint', () async {
+        const testJobId = 'job-123';
+
+        mockDio.httpClientAdapter = _MockHttpClientAdapter(
+          onFetch: (options, requestStream, cancelFuture) async {
+            expect(options.method, 'DELETE');
+            expect(options.path, '/v3/jobs/scans/$testJobId/cleanup');
+            expect(options.headers['X-Device-ID'], testDeviceId);
+
+            return ResponseBody.fromString(
+              '',
+              204,
+              headers: {
+                Headers.contentTypeHeader: [Headers.jsonContentType],
+              },
+            );
+          },
+        );
+
+        await talariaClient.cleanupJob(testJobId);
+      });
+
+      test('should throw DioException on cleanup failure', () async {
+        const testJobId = 'job-123';
+
+        mockDio.httpClientAdapter = _MockHttpClientAdapter(
+          onFetch: (options, requestStream, cancelFuture) async {
+            return ResponseBody.fromString(
+              '{"error": "Job not found"}',
+              404,
+              headers: {
+                Headers.contentTypeHeader: [Headers.jsonContentType],
+              },
+            );
+          },
+        );
+
+        expect(
+          () => talariaClient.cleanupJob(testJobId),
+          throwsA(isA<DioException>()),
+        );
+      });
+    });
   });
 
   group('ScanJobResponse', () {
