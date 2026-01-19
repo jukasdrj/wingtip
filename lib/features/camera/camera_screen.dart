@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
 import 'package:wingtip/features/camera/image_processor.dart';
+import 'package:wingtip/features/talaria/job_state_provider.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -53,8 +54,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       debugPrint('  - Processing time: ${result.processingTimeMs}ms');
       debugPrint('  - Size reduction: ${result.originalSize} -> ${result.processedSize} bytes');
 
-      // TODO: Handle processed image (e.g., upload, save to database, etc.)
-      // This will be implemented in a future story
+      // Upload to Talaria for analysis
+      final jobStateNotifier = ref.read(jobStateProvider.notifier);
+      await jobStateNotifier.uploadImage(result.outputPath);
     } catch (e) {
       debugPrint('[CameraScreen] Error capturing/processing image: $e');
     }
