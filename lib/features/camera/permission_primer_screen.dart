@@ -49,11 +49,36 @@ class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> with Wi
   }
 
   Future<void> _handleGrantAccess() async {
+    // Check current status first
+    final currentStatus = await Permission.camera.status;
+    debugPrint('[PermissionPrimer] Current camera status: $currentStatus');
+    debugPrint('[PermissionPrimer] isGranted: ${currentStatus.isGranted}');
+    debugPrint('[PermissionPrimer] isDenied: ${currentStatus.isDenied}');
+    debugPrint('[PermissionPrimer] isPermanentlyDenied: ${currentStatus.isPermanentlyDenied}');
+    debugPrint('[PermissionPrimer] isRestricted: ${currentStatus.isRestricted}');
+    debugPrint('[PermissionPrimer] isLimited: ${currentStatus.isLimited}');
+
+    // If already granted, navigate immediately
+    if (currentStatus.isGranted) {
+      debugPrint('[PermissionPrimer] Permission already granted, navigating to camera');
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const CameraScreen(),
+        ),
+      );
+      return;
+    }
+
+    // Request permission (shows iOS system dialog)
+    debugPrint('[PermissionPrimer] Requesting camera permission...');
     final status = await Permission.camera.request();
+    debugPrint('[PermissionPrimer] Permission request result: $status');
 
     if (!mounted) return;
 
     if (status.isGranted) {
+      debugPrint('[PermissionPrimer] Permission granted, navigating to camera');
       // Permission granted, navigate to camera screen
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -61,11 +86,15 @@ class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> with Wi
         ),
       );
     } else if (status.isDenied) {
-      // Permission denied, show explanation
+      debugPrint('[PermissionPrimer] Permission denied');
+      // Permission denied once, allow retry
       _showPermissionDeniedDialog(isDenied: true);
     } else if (status.isPermanentlyDenied) {
+      debugPrint('[PermissionPrimer] Permission permanently denied');
       // Permission permanently denied, show settings dialog
       _showPermissionDeniedDialog(isPermanentlyDenied: true);
+    } else {
+      debugPrint('[PermissionPrimer] Unexpected permission status: $status');
     }
   }
 

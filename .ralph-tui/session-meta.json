@@ -1,14 +1,15 @@
 {
-  "id": "5306752a-b992-462d-a5a6-008f309e2c75",
-  "status": "running",
-  "startedAt": "2026-01-19T15:49:06.874Z",
-  "updatedAt": "2026-01-19T17:15:17.431Z",
+  "id": "68cf4189-7624-4ed1-94fc-0f6a73969aa7",
+  "status": "completed",
+  "startedAt": "2026-01-20T14:52:38.079Z",
+  "updatedAt": "2026-01-20T17:29:15.528Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
-  "prdPath": "tasks/prd-epic3.json",
-  "currentIteration": 19,
+  "prdPath": "tasks/prd-epic4.json",
+  "currentIteration": 15,
   "maxIterations": 25,
   "totalTasks": 0,
-  "tasksCompleted": 19,
-  "cwd": "/Users/juju/dev_repos/wingtip"
+  "tasksCompleted": 15,
+  "cwd": "/Users/juju/dev_repos/wingtip",
+  "endedAt": "2026-01-20T17:29:15.527Z"
 }
