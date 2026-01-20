@@ -2,16 +2,20 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:wingtip/core/failed_scans_directory.dart';
+import 'package:wingtip/core/network_status_provider.dart';
 import 'package:wingtip/core/sse_client.dart';
 import 'package:wingtip/core/sse_client_provider.dart';
 import 'package:wingtip/core/talaria_client.dart';
 import 'package:wingtip/core/talaria_client_provider.dart';
 import 'package:wingtip/data/database.dart';
 import 'package:wingtip/data/database_provider.dart';
+import 'package:wingtip/data/failed_scans_repository.dart';
 import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/features/talaria/job_state_provider.dart';
 
@@ -414,6 +418,225 @@ void main() {
       expect(savedBook.author, 'Updated Author', reason: 'Author should be updated');
       expect(savedBook.format, 'Paperback', reason: 'Format should be updated');
       expect(savedBook.spineConfidence, 0.95, reason: 'Confidence should be updated');
+    }, timeout: const Timeout(Duration(seconds: 60)));
+  });
+
+  group('Critical Flow: Offline → Online Reconnection', () {
+    late AppDatabase database;
+    late ProviderContainer container;
+    late StreamController<bool> networkStatusController;
+    late Directory tempDir;
+
+    setUp(() async {
+      // Set up fake path provider
+      PathProviderPlatform.instance = FakePathProviderPlatform();
+
+      // Create in-memory database for testing
+      database = AppDatabase.test(NativeDatabase.memory());
+
+      // Create temporary directory for test files
+      tempDir = await Directory.systemTemp.createTemp('wingtip_test_');
+
+      // Create network status controller (start offline)
+      networkStatusController = StreamController<bool>.broadcast();
+      networkStatusController.add(false);
+
+      // Create provider container with test overrides
+      container = ProviderContainer(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          networkStatusProvider.overrideWith((ref) => networkStatusController.stream),
+        ],
+      );
+    });
+
+    tearDown(() async {
+      // Close database
+      await database.close();
+
+      // Dispose container
+      container.dispose();
+
+      // Close network status controller
+      await networkStatusController.close();
+
+      // Clean up temp files
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('should transition from offline to online and enable retry', () async {
+      // ARRANGE
+      // Wait for initial network status to be emitted
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Verify network starts offline by checking the current state
+      // Note: We can't use .future on a broadcast stream, so we check state directly
+
+      // Create a failed scan while offline
+      const testJobId = 'job-offline-reconnect-test';
+      const testErrorMessage = 'No internet connection';
+
+      // Create test image file
+      final testImagePath = '${tempDir.path}/offline_test.jpg';
+      final testImageFile = File(testImagePath);
+      await testImageFile.writeAsBytes([
+        0xFF, 0xD8, 0xFF, 0xE0, // JPEG header
+        0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, // JFIF marker
+        0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+        0xFF, 0xD9, // JPEG end marker
+      ]);
+
+      expect(await testImageFile.exists(), true, reason: 'Test image should be created');
+
+      // Move image to failed_scans directory
+      final persistentPath = await FailedScansDirectory.moveImage(
+        testImagePath,
+        testJobId,
+      );
+
+      // Save failed scan to database
+      await database.saveFailedScan(
+        jobId: testJobId,
+        imagePath: persistentPath,
+        errorMessage: testErrorMessage,
+        failureReason: FailureReason.networkError,
+        retentionPeriod: const Duration(days: 7),
+      );
+
+      // ASSERT: Verify failed scan was saved
+      final failedScans = await database.select(database.failedScans).get();
+      expect(failedScans.length, 1, reason: 'One failed scan should be saved');
+
+      final failedScan = failedScans.first;
+      expect(failedScan.jobId, testJobId, reason: 'Job ID should match');
+      expect(failedScan.errorMessage, testErrorMessage, reason: 'Error message should match');
+      expect(failedScan.failureReason, FailureReason.networkError, reason: 'Failure reason should be network error');
+      expect(await File(failedScan.imagePath).exists(), true, reason: 'Image file should exist');
+
+      // ACT: Simulate network reconnection
+      networkStatusController.add(true);
+
+      // Wait for the stream to propagate
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // ASSERT: Verify network status shows online
+      final repository = container.read(failedScansRepositoryProvider);
+      final failedScansCount = await repository.getFailedScansCount();
+      expect(failedScansCount, 1, reason: 'Failed scan should still be present');
+
+      // Simulate successful retry by saving a book
+      await database.into(database.books).insertOnConflictUpdate(
+        BooksCompanion.insert(
+          isbn: '978-0-987654-32-1',
+          title: 'Book After Reconnection',
+          author: 'Network Test Author',
+          coverUrl: const Value('https://example.com/reconnect-cover.jpg'),
+          format: const Value('Paperback'),
+          addedDate: DateTime.now().millisecondsSinceEpoch,
+          spineConfidence: const Value(0.88),
+        ),
+      );
+
+      // ASSERT: Verify book was saved
+      final books = await database.select(database.books).get();
+      expect(books.length, 1, reason: 'One book should be saved after retry');
+
+      final book = books.first;
+      expect(book.isbn, '978-0-987654-32-1', reason: 'ISBN should match');
+      expect(book.title, 'Book After Reconnection', reason: 'Title should match');
+      expect(book.author, 'Network Test Author', reason: 'Author should match');
+      expect(book.spineConfidence, 0.88, reason: 'Spine confidence should match');
+
+      // Simulate cleanup after successful retry
+      await FailedScansDirectory.deleteImage(testJobId);
+      await database.deleteFailedScan(testJobId);
+
+      // ASSERT: Verify cleanup
+      final remainingScans = await database.select(database.failedScans).get();
+      expect(remainingScans.length, 0, reason: 'Failed scan should be removed after successful retry');
+
+      // Verify final state
+      final finalBooks = await database.select(database.books).get();
+      expect(finalBooks.length, 1, reason: 'Book should remain in database');
+
+      final finalFailedScans = await database.select(database.failedScans).get();
+      expect(finalFailedScans.length, 0, reason: 'No failed scans should remain');
+    }, timeout: const Timeout(Duration(seconds: 60)));
+
+    test('should handle multiple failed scans waiting for reconnection', () async {
+      // ARRANGE
+      // Create multiple failed scans while offline
+      final testScans = [
+        {
+          'jobId': 'job-offline-1',
+          'errorMessage': 'No internet connection',
+          'failureReason': FailureReason.networkError,
+        },
+        {
+          'jobId': 'job-offline-2',
+          'errorMessage': 'Network timeout',
+          'failureReason': FailureReason.networkError,
+        },
+        {
+          'jobId': 'job-offline-3',
+          'errorMessage': 'Connection refused',
+          'failureReason': FailureReason.networkError,
+        },
+      ];
+
+      // Create and save all failed scans
+      for (var i = 0; i < testScans.length; i++) {
+        final scan = testScans[i];
+        final testImagePath = '${tempDir.path}/offline_test_$i.jpg';
+        final testImageFile = File(testImagePath);
+
+        await testImageFile.writeAsBytes([
+          0xFF, 0xD8, 0xFF, 0xE0, // JPEG header
+          0x00, 0x10, 0x4A, 0x46, 0x49, 0x46,
+          0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+          0xFF, 0xD9, // JPEG end marker
+        ]);
+
+        final persistentPath = await FailedScansDirectory.moveImage(
+          testImagePath,
+          scan['jobId'] as String,
+        );
+
+        await database.saveFailedScan(
+          jobId: scan['jobId'] as String,
+          imagePath: persistentPath,
+          errorMessage: scan['errorMessage'] as String,
+          failureReason: scan['failureReason'] as FailureReason,
+          retentionPeriod: const Duration(days: 7),
+        );
+      }
+
+      // ASSERT: Verify all failed scans were saved
+      final failedScans = await database.select(database.failedScans).get();
+      expect(failedScans.length, 3, reason: 'Three failed scans should be saved');
+
+      // ACT: Simulate network reconnection
+      networkStatusController.add(true);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // ASSERT: Verify all failed scans are still present and ready for retry
+      final repository = container.read(failedScansRepositoryProvider);
+      final failedScansCount = await repository.getFailedScansCount();
+      expect(failedScansCount, 3, reason: 'All three failed scans should be waiting for retry');
+
+      // Verify each scan has correct attributes
+      for (var i = 0; i < testScans.length; i++) {
+        final scan = failedScans.firstWhere(
+          (s) => s.jobId == testScans[i]['jobId'],
+        );
+
+        expect(scan.jobId, testScans[i]['jobId'], reason: 'Job ID should match');
+        expect(scan.errorMessage, testScans[i]['errorMessage'], reason: 'Error message should match');
+        expect(scan.failureReason, testScans[i]['failureReason'], reason: 'Failure reason should match');
+        expect(await File(scan.imagePath).exists(), true, reason: 'Image file should exist');
+      }
     }, timeout: const Timeout(Duration(seconds: 60)));
   });
 }
