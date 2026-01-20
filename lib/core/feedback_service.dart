@@ -24,7 +24,7 @@ class FeedbackService {
 
       final emailUri = Uri(
         scheme: 'mailto',
-        path: 'feedback@ooheynerds.com', // TODO: Replace with actual feedback email
+        path: 'feedback@ooheynerds.com',
         query: _encodeQueryParameters({
           'subject': 'Wingtip Beta Feedback (v${packageInfo.version})',
           'body': emailBody,

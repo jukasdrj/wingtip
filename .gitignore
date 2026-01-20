@@ -53,3 +53,6 @@ repomix.config.json
 
 # Documentation audit files (temporary)
 doc_audit_*.md
+
+# Environment variables (never commit secrets!)
+.env

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/image_cache_manager.dart';
 import '../../data/database.dart';
+import 'edit_book_screen.dart';
 
 class BookDetailBottomSheet extends StatefulWidget {
   final Book book;
@@ -145,8 +146,16 @@ class _BookDetailBottomSheetState extends State<BookDetailBottomSheet> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () {
-              // TODO: Implement edit functionality in future story
+            onPressed: () async {
+              // Close bottom sheet first
+              Navigator.of(context).pop();
+
+              // Navigate to edit screen
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => EditBookScreen(book: widget.book),
+                ),
+              );
             },
             child: const Text('Edit'),
           ),

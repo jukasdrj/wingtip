@@ -9,6 +9,54 @@ This guide walks through the steps to distribute Wingtip via TestFlight for beta
 - App Store Connect access
 - Signing certificates and provisioning profiles configured
 
+## Pre-Flight Configuration Checklist
+
+Before building for TestFlight, ensure all production configuration is complete:
+
+### ✅ Required Environment Variables
+
+1. **Sentry DSN** - Configure crash reporting
+   - [ ] Create Sentry project at [sentry.io](https://sentry.io)
+   - [ ] Copy DSN from project settings
+   - [ ] Add to build command: `--dart-define=SENTRY_DSN="your-dsn"`
+   - [ ] See [CRASH_REPORTING.md](CRASH_REPORTING.md) for details
+
+2. **Talaria Base URL** - Configure backend API
+   - [ ] Obtain production Talaria API URL from backend team
+   - [ ] Add to build command: `--dart-define=TALARIA_BASE_URL="https://api.talaria.production.com"`
+   - [ ] Verify URL is accessible from test devices
+
+3. **Sentry Environment** - Set environment name
+   - [ ] Add to build command: `--dart-define=SENTRY_ENVIRONMENT="production"`
+
+### ✅ Code Configuration
+
+1. **Feedback Email** - Update if needed
+   - [ ] Verify `feedback@ooheynerds.com` is correct in `lib/core/feedback_service.dart`
+   - [ ] Ensure email account is monitored
+
+2. **Bundle ID & Signing** - Verify iOS configuration
+   - [ ] Confirm Bundle ID: `com.ooheynerds.wingtip`
+   - [ ] Verify Team ID: `8Z67H8Y8DW`
+   - [ ] Check Xcode signing configuration
+
+### ✅ Reference Files
+
+- [ ] Review `.env.example` for all environment variables
+- [ ] Ensure no blocking TODOs remain in codebase (`grep -r "TODO" lib/`)
+- [ ] Run `flutter analyze` with zero errors
+
+### Production Build Command
+
+```bash
+flutter build ios --release \
+  --dart-define=SENTRY_DSN="your-production-dsn-here" \
+  --dart-define=SENTRY_ENVIRONMENT="production" \
+  --dart-define=TALARIA_BASE_URL="https://api.talaria.production.com"
+```
+
+---
+
 ## Step 1: Configure iOS Bundle ID and Signing
 
 The app is already configured with:

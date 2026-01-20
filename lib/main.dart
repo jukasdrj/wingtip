@@ -22,9 +22,10 @@ import 'package:wingtip/widgets/shake_to_feedback_wrapper.dart';
 
 void main() async {
   // Initialize Sentry for crash reporting and analytics
+  // Configure via: flutter run --dart-define=SENTRY_DSN="your-dsn-here"
+  // Get DSN from: https://sentry.io/settings/projects/<your-project>/keys/
+  // See CRASH_REPORTING.md for detailed setup instructions
   await CrashReportingService.initialize(
-    // TODO: Replace with actual Sentry DSN in production
-    // Get DSN from: https://sentry.io/settings/projects/<your-project>/keys/
     dsn: const String.fromEnvironment(
       'SENTRY_DSN',
       defaultValue: '', // Empty DSN disables Sentry in development
