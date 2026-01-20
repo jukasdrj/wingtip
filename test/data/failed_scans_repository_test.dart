@@ -7,6 +7,11 @@ void main() {
   late AppDatabase database;
   late FailedScansRepository repository;
 
+  setUpAll(() {
+    // Initialize Flutter binding for path_provider
+    TestWidgetsFlutterBinding.ensureInitialized();
+  });
+
   setUp(() {
     database = AppDatabase.test(NativeDatabase.memory());
     repository = FailedScansRepository(database);

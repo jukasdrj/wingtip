@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wingtip/core/failed_scans_directory.dart';
 import 'database.dart';
@@ -34,8 +35,14 @@ class FailedScansRepository {
         .getSingleOrNull();
 
     if (scan != null) {
-      // Delete the image file
-      await FailedScansDirectory.deleteImage(scan.jobId);
+      // Delete the image file (ignore errors if file doesn't exist or can't be deleted)
+      try {
+        await FailedScansDirectory.deleteImage(scan.jobId);
+      } catch (e) {
+        // Log but don't fail - the database entry should still be deleted
+        // This handles cases where the file was already deleted or is inaccessible
+        debugPrint('[FailedScansRepository] Failed to delete image file: $e');
+      }
 
       // Delete the database entry
       await (_database.delete(_database.failedScans)
@@ -77,9 +84,13 @@ class FailedScansRepository {
   Future<void> clearAllFailedScans() async {
     final scans = await _database.select(_database.failedScans).get();
 
-    // Delete all image files
+    // Delete all image files (ignore errors if files don't exist or can't be deleted)
     for (final scan in scans) {
-      await FailedScansDirectory.deleteImage(scan.jobId);
+      try {
+        await FailedScansDirectory.deleteImage(scan.jobId);
+      } catch (e) {
+        debugPrint('[FailedScansRepository] Failed to delete image file: $e');
+      }
     }
 
     // Delete all database entries
