@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingtip/core/sse_client.dart';
+import '../fixtures/fixtures.dart';
 
 void main() {
   group('SseEvent', () {
@@ -17,6 +18,12 @@ void main() {
       expect(event.data['progress'], 0.5);
     });
 
+    test('should parse progress event using fixture', () {
+      expect(progressEvent50.type, SseEventType.progress);
+      expect(progressEvent50.data['progress'], 0.5);
+      expect(progressEvent50.data['message'], 'Detecting book spines...');
+    });
+
     test('should parse result event from JSON', () {
       final json = {
         'type': 'result',
@@ -27,6 +34,14 @@ void main() {
 
       expect(event.type, SseEventType.result);
       expect(event.data['isbn'], '1234567890');
+    });
+
+    test('should parse result event using fixture', () {
+      expect(resultEventMartian.type, SseEventType.result);
+      expect(resultEventMartian.data['isbn'], '978-0-553-41802-6');
+      expect(resultEventMartian.data['title'], 'The Martian');
+      expect(resultEventMartian.data['author'], 'Andy Weir');
+      expect(resultEventMartian.data['spineConfidence'], 0.95);
     });
 
     test('should parse complete event from JSON', () {
@@ -303,6 +318,13 @@ void main() {
         expect(events[2].data['isbn'], '1234567890');
         expect(events[3].type, SseEventType.complete);
         expect(events[3].data['status'], 'success');
+      });
+
+      test('should handle successful scan sequence from fixture', () async {
+        expect(successfulSingleBookSequence.length, 5);
+        expect(successfulSingleBookSequence[0].type, SseEventType.progress);
+        expect(successfulSingleBookSequence[3].type, SseEventType.result);
+        expect(successfulSingleBookSequence[4].type, SseEventType.complete);
       });
 
       test('should handle error event', () async {

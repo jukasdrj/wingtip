@@ -9,6 +9,7 @@ import 'package:wingtip/data/failed_scans_repository.dart' hide watchFailedScans
 import 'package:wingtip/data/failed_scans_repository.dart' as failed_scans show watchFailedScansProvider;
 import 'package:wingtip/features/library/library_screen.dart';
 import 'package:wingtip/features/library/sort_options.dart';
+import '../../fixtures/fixtures.dart';
 
 /// Mock AppDatabase for testing collections
 class MockAppDatabase implements AppDatabase {
@@ -104,29 +105,8 @@ void main() {
     });
 
     testWidgets('Collections tab renders list of collections with book counts', (tester) async {
-      // Create test collections
-      final testCollections = [
-        CollectionWithCount(
-          id: 1,
-          name: 'To Read',
-          createdAt: DateTime(2024, 1, 1).millisecondsSinceEpoch,
-          bookCount: 5,
-        ),
-        CollectionWithCount(
-          id: 2,
-          name: 'Favorites',
-          createdAt: DateTime(2024, 1, 2).millisecondsSinceEpoch,
-          bookCount: 12,
-        ),
-        CollectionWithCount(
-          id: 3,
-          name: 'Sci-Fi',
-          createdAt: DateTime(2024, 1, 3).millisecondsSinceEpoch,
-          bookCount: 8,
-        ),
-      ];
-
-      mockDatabase = MockAppDatabase(mockCollections: testCollections);
+      // Use shared fixture data for collections
+      mockDatabase = MockAppDatabase(mockCollections: collectionsWithCounts.take(3).toList());
 
       await tester.pumpWidget(
         ProviderScope(
@@ -153,15 +133,14 @@ void main() {
       expect(find.text('Favorites'), findsOneWidget);
       expect(find.text('Sci-Fi'), findsOneWidget);
 
-      // Verify book counts are displayed
-      expect(find.text('5 books'), findsOneWidget);
-      expect(find.text('12 books'), findsOneWidget);
-      expect(find.text('8 books'), findsOneWidget);
+      // Verify book counts are displayed (using fixture expected values)
+      expect(find.text('2 books'), findsOneWidget); // To Read has 2 books in fixture
+      expect(find.text('3 books'), findsOneWidget); // Favorites has 3 books in fixture
+      expect(find.text('3 books'), findsAtLeastNWidgets(2)); // Sci-Fi also has 3 books
 
       // Verify book count badges (displayed as numbers)
-      expect(find.text('5'), findsAtLeastNWidgets(1));
-      expect(find.text('12'), findsAtLeastNWidgets(1));
-      expect(find.text('8'), findsAtLeastNWidgets(1));
+      expect(find.text('2'), findsAtLeastNWidgets(1));
+      expect(find.text('3'), findsAtLeastNWidgets(2));
 
       // Verify collection icons
       expect(find.byIcon(Icons.collections_bookmark), findsAtLeastNWidgets(3));
