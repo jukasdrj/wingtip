@@ -1,0 +1,385 @@
+{
+  "name": "Project Wingtip - Epic 4: Safety Net Testing",
+  "description": "Build practical test infrastructure for solo dev with AI assistance - integration tests for critical flows, widget smoke tests for main screens, and tooling for confident iteration. No enterprise theater, just fast feedback loops.",
+  "branchName": "ralph/wingtip-epic4-safety-net",
+  "userStories": [
+    {
+      "id": "US-201",
+      "title": "Investigate and Fix Existing Test Failures",
+      "description": "As a developer, I want all existing tests passing so that I have a clean baseline for building new tests.",
+      "acceptanceCriteria": [
+        "Run flutter test and identify which 3 tests are failing",
+        "Investigate root cause of each failure (obsolete mocks, changed behavior, etc.)",
+        "Fix failures OR delete tests if they're testing obsolete code",
+        "Verify flutter test shows 0 failures",
+        "Document any tests deleted and why in commit message",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Start with clean slate - fix or remove broken tests before building new ones",
+      "dependsOn": [],
+      "aiAssistanceNotes": "AI can run `flutter test --reporter expanded` to see detailed failure output, analyze stack traces, and suggest fixes based on code changes since tests were written"
+    },
+    {
+      "id": "US-202",
+      "title": "Setup Integration Test Framework",
+      "description": "As a developer, I want integration test infrastructure configured so that I can write end-to-end flow tests.",
+      "acceptanceCriteria": [
+        "Add integration_test package to pubspec.yaml dev_dependencies",
+        "Create integration_test/ directory at project root",
+        "Create integration_test/app_test.dart with simple smoke test (app launches)",
+        "Configure iOS Simulator as test target device",
+        "Verify flutter test integration_test/ launches app in simulator and passes",
+        "Add README in integration_test/ explaining how to run tests",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Foundation for all integration tests - verifies simulator automation works",
+      "dependsOn": [
+        "US-201"
+      ],
+      "aiAssistanceNotes": "AI can use idb MCP to check available simulators, launch specific devices, and verify integration test runs successfully. Tests should mock network calls to avoid Talaria backend dependency."
+    },
+    {
+      "id": "US-203",
+      "title": "Camera to Database Integration Test",
+      "description": "As a developer, I want an integration test for the critical path (camera → upload → SSE → database) so that I know core functionality doesn't break.",
+      "acceptanceCriteria": [
+        "Create integration_test/critical_flows_test.dart",
+        "Test: Mock camera capture, mock SSE stream with book result event, verify book appears in database",
+        "Test includes proper setup (clean database, mock network responses)",
+        "Test includes assertions (book count, title, author, ISBN match expected)",
+        "Test properly tears down (closes database, cleans temp files)",
+        "Test runs in <60 seconds",
+        "flutter test integration_test/critical_flows_test.dart passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "THE golden path test - if this passes, core app functionality works",
+      "dependsOn": [
+        "US-202"
+      ],
+      "aiAssistanceNotes": "AI should mock TalariaClient uploadImage to return fake jobId/streamUrl, mock SSE stream to emit progress/result/complete events, and verify book inserted into Drift database. Use testWidgets with ProviderScope overrides for mocking."
+    },
+    {
+      "id": "US-204",
+      "title": "Failed Scan Retry Flow Integration Test",
+      "description": "As a developer, I want an integration test for failed scan → retry → success flow so that resilience system doesn't break.",
+      "acceptanceCriteria": [
+        "Add test to integration_test/critical_flows_test.dart",
+        "Test: Simulate network failure during upload, verify failed scan saved to FailedScans table with image preserved",
+        "Test: Trigger retry from UI, mock successful upload, verify failed scan removed and book saved",
+        "Test verifies image file cleanup after successful retry",
+        "Test includes error state assertions (error message, createdAt, expiresAt populated)",
+        "flutter test integration_test/critical_flows_test.dart passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Validates Epic 3's resilience system - critical for offline-first promise",
+      "dependsOn": [
+        "US-203"
+      ],
+      "aiAssistanceNotes": "Mock TalariaClient to throw DioException on first call, succeed on retry. Verify FailedScansRepository saves/deletes correctly. Check filesystem for image preservation/cleanup."
+    },
+    {
+      "id": "US-205",
+      "title": "Offline to Online Reconnection Test",
+      "description": "As a developer, I want an integration test for offline → online reconnection so that network recovery works correctly.",
+      "acceptanceCriteria": [
+        "Add test to integration_test/critical_flows_test.dart",
+        "Test: Start with NetworkStatusProvider showing offline",
+        "Test: Create failed scan while offline",
+        "Test: Simulate network reconnection (NetworkStatusProvider shows online)",
+        "Test: Verify retry prompt appears (if auto-retry setting is off)",
+        "Test: Verify books saved after retry completes",
+        "flutter test integration_test/critical_flows_test.dart passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Critical for real-world usage - devices go offline constantly",
+      "dependsOn": [
+        "US-204"
+      ],
+      "aiAssistanceNotes": "Mock connectivity_plus to emit offline/online events. Use StreamController to control network state transitions. Verify UI responds correctly to connectivity changes."
+    },
+    {
+      "id": "US-206",
+      "title": "Collections Management Flow Integration Test",
+      "description": "As a developer, I want an integration test for collections create → add books → filter flow so that Epic 3's collections feature stays working.",
+      "acceptanceCriteria": [
+        "Add test to integration_test/critical_flows_test.dart",
+        "Test: Create new collection via UI",
+        "Test: Add 2-3 books to collection",
+        "Test: Switch to Collections tab and verify book count badge",
+        "Test: Filter library by collection and verify only collection books show",
+        "Test: Remove book from collection and verify UI updates",
+        "flutter test integration_test/critical_flows_test.dart passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Validates Epic 3's advanced library features work end-to-end",
+      "dependsOn": [
+        "US-205"
+      ],
+      "aiAssistanceNotes": "Use finder.byType() and finder.text() to navigate UI. Verify Drift many-to-many BookCollections table updates correctly. Test collection filtering logic in booksProvider."
+    },
+    {
+      "id": "US-207",
+      "title": "Widget Tests for Camera Screens",
+      "description": "As a developer, I want widget tests for camera screens so that camera UI doesn't crash during refactoring.",
+      "acceptanceCriteria": [
+        "Create test/features/camera/camera_screen_test.dart",
+        "Test: CameraScreen renders without crashing (with mocked camera controller)",
+        "Test: Shutter button is visible and tappable",
+        "Test: Permission primer screen shows when camera permission denied",
+        "Test: Stream overlay appears when progressMessage is set in job state",
+        "Test: Session counter displays correctly and increments",
+        "All tests use ProviderScope with mocked providers",
+        "flutter test test/features/camera/ passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Smoke tests to ensure camera screens render - not testing camera plugin itself",
+      "dependsOn": [
+        "US-201"
+      ],
+      "aiAssistanceNotes": "Mock CameraController to avoid real device camera. Mock jobStateNotifierProvider for SSE state. Use testWidgets with pumpWidget and ProviderScope overrides."
+    },
+    {
+      "id": "US-208",
+      "title": "Widget Tests for Library Screens",
+      "description": "As a developer, I want widget tests for library screens so that grid/list/tabs don't break during refactoring.",
+      "acceptanceCriteria": [
+        "Create test/features/library/library_screen_test.dart",
+        "Test: LibraryScreen renders grid with mocked books",
+        "Test: Tabs switch between 'All Books' and 'Failed Scans'",
+        "Test: Search TextField filters books when text entered",
+        "Test: Sort dropdown changes book order",
+        "Test: Empty state shows when no books exist",
+        "Test: Tapping book card opens BookDetailScreen",
+        "All tests use mocked booksProvider with test data",
+        "flutter test test/features/library/library_screen_test.dart passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Core library UI smoke tests - ensure screens render and basic interactions work",
+      "dependsOn": [
+        "US-207"
+      ],
+      "aiAssistanceNotes": "Mock booksProvider with StreamProvider.value() containing test books. Use finder.byType(GridView), finder.text() for assertions. Test navigation with MaterialApp wrapping."
+    },
+    {
+      "id": "US-209",
+      "title": "Widget Tests for Book Detail Flows",
+      "description": "As a developer, I want widget tests for book detail screens so that detail/edit flows don't break.",
+      "acceptanceCriteria": [
+        "Test: BookDetailScreen renders with book data",
+        "Test: Edit button navigates to EditBookScreen",
+        "Test: EditBookScreen saves changes and updates database",
+        "Test: Hero animation tag is set correctly for cover image",
+        "Test: Delete confirmation dialog shows on delete button press",
+        "Test: Raw JSON toggle switches between visual and JSON view",
+        "flutter test test/features/library/book_detail_screen_test.dart passes",
+        "flutter test test/features/library/edit_book_screen_test.dart passes (already exists)",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Detail screen flows - verify navigation and editing work correctly",
+      "dependsOn": [
+        "US-208"
+      ],
+      "aiAssistanceNotes": "Mock database provider for book queries. Test navigation with Navigator.push expectations. Verify form validation in EditBookScreen (already has tests from Epic 3)."
+    },
+    {
+      "id": "US-210",
+      "title": "Widget Tests for Failed Scans UI",
+      "description": "As a developer, I want widget tests for failed scans screens so that retry UI doesn't break.",
+      "acceptanceCriteria": [
+        "Create test/features/library/failed_scan_card_test.dart",
+        "Test: FailedScanCard renders with error message and timestamp",
+        "Test: Retry button triggers retry callback",
+        "Test: Delete button shows confirmation dialog",
+        "Test: FailedScanDetailScreen shows full error and image",
+        "Test: Batch retry button appears in failed scans tab",
+        "flutter test test/features/library/failed_scan*.dart passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Epic 3's failed scan retry system UI validation",
+      "dependsOn": [
+        "US-209"
+      ],
+      "aiAssistanceNotes": "Mock failedScansRepositoryProvider with test failed scans. Test button callbacks with verify() on mock methods. Use finder.byType() for widget assertions."
+    },
+    {
+      "id": "US-211",
+      "title": "Widget Tests for Collections UI",
+      "description": "As a developer, I want widget tests for collections screens so that collection management UI doesn't break.",
+      "acceptanceCriteria": [
+        "Test: Collections tab renders list of collections with book counts",
+        "Test: Create collection dialog appears and accepts input",
+        "Test: Tapping collection filters library to show only collection books",
+        "Test: Long-press book shows 'Add to Collection' in context menu",
+        "Test: Collection badge updates when books added/removed",
+        "flutter test test/features/library/collections*.dart passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Epic 3's collections feature UI validation",
+      "dependsOn": [
+        "US-210"
+      ],
+      "aiAssistanceNotes": "Mock collectionsNotifierProvider with test collections. Test dialog interactions with showDialog expectations. Verify CupertinoActionSheet shows on long-press."
+    },
+    {
+      "id": "US-212",
+      "title": "Widget Tests for Onboarding Flow",
+      "description": "As a developer, I want widget tests for onboarding screens so that first-run experience doesn't break.",
+      "acceptanceCriteria": [
+        "Create test/features/onboarding/onboarding_screen_test.dart",
+        "Test: OnboardingScreen renders 3 slides",
+        "Test: Swiping advances to next slide",
+        "Test: Final slide 'Get Started' button marks onboarding complete",
+        "Test: OnboardingScreen skipped when onboarding already completed",
+        "Test: Permission primer shows after onboarding completion",
+        "flutter test test/features/onboarding/ passes",
+        "flutter analyze shows no errors"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "First-run experience validation - ensure new users see onboarding correctly",
+      "dependsOn": [
+        "US-211"
+      ],
+      "aiAssistanceNotes": "Mock onboardingProvider to test completed/incomplete states. Test PageView navigation with tester.drag(). Verify SharedPreferences writes on completion."
+    },
+    {
+      "id": "US-213",
+      "title": "Test Runner Script and Documentation",
+      "description": "As a developer, I want a simple test runner script so that I can quickly run all safety net tests before committing.",
+      "acceptanceCriteria": [
+        "Create scripts/test.sh with test commands",
+        "Script option 1: Quick smoke (integration tests only, ~30 sec)",
+        "Script option 2: Full safety net (integration + widget tests, ~2-3 min)",
+        "Script option 3: Everything (analyze + all tests)",
+        "Script shows colored output (green pass, red fail)",
+        "Update README.md with 'Testing' section explaining test commands",
+        "Create test/README.md explaining test structure and mocking patterns",
+        "chmod +x scripts/test.sh for easy execution"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Quality of life - make testing fast and easy for solo dev workflow",
+      "dependsOn": [
+        "US-212"
+      ],
+      "aiAssistanceNotes": "Create bash script with flutter test commands. Use || exit 1 for fail-fast behavior. Document common test patterns in test/README.md for future AI assistance reference."
+    },
+    {
+      "id": "US-214",
+      "title": "Configuration TODOs Resolution",
+      "description": "As a developer, I want production configuration TODOs resolved so that app is ready for TestFlight with real services.",
+      "acceptanceCriteria": [
+        "Replace TODO in lib/core/feedback_service.dart with actual feedback email",
+        "Replace TODO in lib/core/talaria_client_provider.dart with actual Talaria base URL or environment config",
+        "Replace TODO in lib/main.dart with actual Sentry DSN (create .env or config file for secrets)",
+        "Replace TODO in lib/features/library/book_detail_bottom_sheet.dart with edit functionality (or remove if US-154 completed it)",
+        "Create .env.example file documenting required environment variables",
+        "Update TESTFLIGHT_SETUP.md with configuration checklist",
+        "flutter analyze shows no errors",
+        "Grep for 'TODO' in lib/ returns only acceptable in-code task comments, not blocking configurations"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Clean up configuration TODOs found in codebase - blocked TestFlight readiness",
+      "dependsOn": [],
+      "aiAssistanceNotes": "AI can grep for TODOs, categorize them (config vs feature vs tech-debt), and create environment config pattern. Use flutter_dotenv or similar for secrets management."
+    },
+    {
+      "id": "US-215",
+      "title": "Test Fixture Expansion",
+      "description": "As a developer, I want comprehensive test fixtures so that integration and widget tests have realistic test data.",
+      "acceptanceCriteria": [
+        "Create test/fixtures/books.dart with 10+ sample books (varied authors, titles, ISBNs, formats)",
+        "Create test/fixtures/failed_scans.dart with sample failed scans (different error types)",
+        "Create test/fixtures/collections.dart with sample collections",
+        "Create test/fixtures/sse_events.dart with sample SSE events (progress, result, complete, error)",
+        "Add test/fixtures/test_images/ with 3-4 sample book spine images",
+        "Export all fixtures from test/fixtures/fixtures.dart for easy import",
+        "Update existing tests to use shared fixtures instead of inline test data",
+        "flutter test passes with fixture-based tests"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Centralized test data improves test maintainability and realism",
+      "dependsOn": [
+        "US-201"
+      ],
+      "aiAssistanceNotes": "AI can generate realistic book data, create sample images programmatically, and refactor existing tests to use fixtures. Fixtures make tests more readable and maintainable."
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-01-20T16:00:00.000Z",
+    "epic": 4,
+    "epicName": "Safety Net Testing",
+    "previousEpics": [
+      "Epic 3: Production Polish & iOS Excellence (US-101 to US-172)"
+    ],
+    "focusAreas": [
+      "Integration Testing (US-202 to US-206)",
+      "Widget Smoke Tests (US-207 to US-212)",
+      "Test Tooling & DX (US-213, US-215)",
+      "Production Readiness (US-201, US-214)"
+    ],
+    "launchPriority": {
+      "mustHave": [
+        "US-201",
+        "US-202",
+        "US-203",
+        "US-207",
+        "US-208",
+        "US-213",
+        "US-214"
+      ],
+      "highImpact": [
+        "US-204",
+        "US-205",
+        "US-209",
+        "US-210",
+        "US-215"
+      ],
+      "canDefer": [
+        "US-206",
+        "US-211",
+        "US-212"
+      ]
+    },
+    "testingPhilosophy": {
+      "soloDevFocus": "Fast feedback loops over comprehensive coverage. Tests should catch breaks immediately, not achieve arbitrary coverage percentages.",
+      "aiAssistance": "All tests designed to be runnable and debuggable by AI assistants (Claude, GitHub Copilot) with access to idb MCP and Flutter test framework.",
+      "realDeviceAutomation": "Integration tests use iOS Simulator automation via idb for realistic flow testing without manual device interaction.",
+      "noEnterpriseTheater": "No CI/CD pipelines, no coverage reports, no golden tests, no performance benchmarks. Just practical safety nets.",
+      "maintenanceOverhead": "Near zero - tests only break when you intentionally change behavior. Mocks are simple, fixtures are centralized.",
+      "estimatedTime": "2 weeks total: Week 1 (integration tests + critical widget tests), Week 2 (remaining widget tests + tooling + config cleanup)"
+    },
+    "aiAssistanceGuidelines": {
+      "testExecution": "AI should run flutter test with --reporter expanded for detailed output, analyze failures, and suggest fixes based on code changes.",
+      "mockingStrategy": "Use ProviderScope overrides for Riverpod mocking. Mock network calls (TalariaClient, SSE streams) to avoid backend dependencies. Use in-memory Drift database for fast tests.",
+      "idbUsage": "AI can use idb MCP to list simulators (idb list-targets), launch specific devices (idb boot <udid>), and verify app runs correctly during integration tests.",
+      "testPatterns": "Follow existing test patterns in test/core/ and test/features/. Widget tests use testWidgets, unit tests use test(), integration tests use testWidgets with IntegrationTestWidgetsFlutterBinding.",
+      "failureTriage": "When tests fail, AI should: 1) Read test code to understand intent, 2) Read implementation code for changes, 3) Determine if test is obsolete or implementation broke, 4) Suggest fix or deletion with rationale."
+    },
+    "updatedAt": "2026-01-20T16:00:00.000Z"
+  }
+}
