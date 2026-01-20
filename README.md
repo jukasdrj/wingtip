@@ -215,26 +215,82 @@ Wingtip employs a layered architecture focused on local-first design:
 
 ## Testing
 
-Run unit and widget tests using Flutter's built-in test framework:
+Wingtip has a comprehensive test suite with a simple test runner script for pre-commit validation.
+
+### Quick Start
+
+Use the test runner script for quick validation before committing:
 
 ```bash
+# Quick smoke test (~30 seconds) - Integration tests only
+./scripts/test.sh quick
+
+# Full safety net (~2-3 minutes) - Integration + widget tests [DEFAULT]
+./scripts/test.sh
+
+# Everything (~3-5 minutes) - Static analysis + all tests
+./scripts/test.sh all
+```
+
+### Test Runner Options
+
+The `scripts/test.sh` script provides colored output (green for pass, red for fail) and multiple modes:
+
+- **`quick`** - Integration tests only (~30 sec) - Best for quick pre-commit checks
+- **`full`** - Integration + widget tests (~2-3 min) - Recommended safety net [DEFAULT]
+- **`all`** - Analyze + all tests (~3-5 min) - Complete validation before push
+- **`unit`** - Unit tests only (core/data/services) - For backend logic changes
+- **`widget`** - Widget tests only (features) - For UI changes
+
+**Examples:**
+```bash
+./scripts/test.sh quick        # Quick pre-commit check
+./scripts/test.sh              # Full safety net (default)
+./scripts/test.sh all          # Complete validation
+./scripts/test.sh unit         # Unit tests only
+./scripts/test.sh widget       # Widget tests only
+```
+
+### Manual Testing
+
+Run tests manually with Flutter commands:
+
+```bash
+# Run all tests
 flutter test
-```
 
-For specific test files:
-```bash
+# Run specific test file
 flutter test test/path/to/test_file.dart
-```
 
-With coverage report:
-```bash
+# Run integration tests only
+flutter test test/integration/
+
+# Run widget tests only
+flutter test test/features/
+
+# Run with coverage
 flutter test --coverage
 ```
 
-Tests should cover:
-- Database queries and FTS5 search (`test/data/`)
-- Network clients and SSE parsing (`test/core/`)
-- UI components (`test/features/`)
+### Test Structure
+
+The test suite is organized by type:
+
+- **`test/integration/`** - Critical flow tests (scan → save → display) - ~30 seconds
+- **`test/features/`** - Widget tests for UI components - ~1-2 minutes
+- **`test/core/`** - Unit tests for network, SSE, device ID - ~10 seconds
+- **`test/data/`** - Database and repository tests - ~10 seconds
+- **`test/services/`** - Background service tests - ~10 seconds
+
+See [test/README.md](test/README.md) for detailed testing patterns, mocking strategies, and examples.
+
+### What Tests Cover
+
+- Database queries and FTS5 full-text search
+- SSE event parsing and job state management
+- Failed scan retry logic and cleanup
+- Collections and metadata editing
+- Camera screen and library UI components
 - Mock providers using Riverpod's testing utilities
 
 ## Performance Targets
