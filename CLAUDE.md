@@ -81,9 +81,19 @@ This app uses **Riverpod 3.x** for all state management:
 - `databaseProvider` - Drift database instance
 - `talariaClientProvider` - HTTP client for Talaria API
 - `networkStatusProvider` - Connectivity monitoring
-- `jobStateNotifierProvider` - Active scan job queue
-- `booksProvider` - Stream of books from database
+- `jobStateNotifierProvider` - Active scan job queue with SSE streaming
+- `booksProvider` - Stream of books from database with sort/filter/collection support
 - `searchQueryProvider` - Current search query state
+- `failedScansRepositoryProvider` - Failed scan persistence and retry logic
+- `watchFailedScansProvider` - Stream of failed scans for UI
+- `collectionsNotifierProvider` - Collections management (create, delete, add/remove books)
+- `selectedCollectionProvider` - Currently active collection filter
+- `sortOrderProvider` - Current sort option (date, title, author, confidence)
+- `filterStateProvider` - Active filters (format, review status, date range)
+- `performanceMetricsProvider` - Cold start, shutter latency, processing time tracking
+- `sessionCounterProvider` - Scan session gamification counter
+- `cameraSettingsProvider` - iOS camera preferences (Night Mode, etc.)
+- `performanceOverlayProvider` - 120Hz ProMotion debugging overlay toggle
 
 ### Data Flow: The Capture Loop
 
@@ -110,8 +120,26 @@ This app uses **Riverpod 3.x** for all state management:
 - Automatically synced via triggers on insert/update/delete
 - Search via `database.searchBooks(query)`
 
-**Failed Scans Table:**
-- Tracks jobs that errored for debugging
+**FailedScans Table:**
+- `id` (INTEGER, PRIMARY KEY AUTOINCREMENT)
+- `jobId` (TEXT)
+- `imagePath` (TEXT) - Path to preserved image in app_documents/failed_scans/
+- `errorMessage` (TEXT) - User-friendly error description
+- `createdAt` (INTEGER, timestamp)
+- `expiresAt` (INTEGER, timestamp) - Based on retention policy (default 7 days)
+- Supports persistent retry queue with configurable retention
+- Images preserved for manual/batch retry operations
+
+**Collections Table:**
+- `id` (INTEGER, PRIMARY KEY AUTOINCREMENT)
+- `name` (TEXT) - Collection name (e.g., "To Read", "Favorites")
+- `createdAt` (INTEGER, timestamp)
+
+**BookCollections Table (Many-to-Many):**
+- `bookIsbn` (TEXT, foreign key to Books)
+- `collectionId` (INTEGER, foreign key to Collections)
+- Composite primary key on (bookIsbn, collectionId)
+- Enables books to belong to multiple collections
 
 ### API Integration
 
@@ -243,10 +271,17 @@ Target: < 500ms processing time per image.
 
 ## Offline Behavior
 
-- Library is 100% functional offline (viewing, searching, deleting)
+- Library is 100% functional offline (viewing, searching, deleting, editing, collections management)
 - Only camera scanning requires network connection
 - Network status shown in top-right corner when offline
-- Failed uploads are NOT queued - user must manually retry
+- **Failed Scan Queue System:**
+  - Failed uploads automatically saved to FailedScans table with preserved images
+  - Manual retry: Tap retry button on individual failed scan cards
+  - Batch retry: "Retry All" button processes all failed scans sequentially (throttled to 1/second)
+  - Auto-retry prompt: When network reconnects, user prompted to retry all failed scans
+  - Configurable retention: 3/7/14/30 days or never (default 7 days)
+  - Auto-cleanup: Expired scans deleted on app startup and daily checks
+  - Detailed analytics: Failure breakdown by type (network, quality, no books, server error, rate limit)
 
 ## Testing Strategy
 
@@ -264,6 +299,122 @@ final container = ProviderContainer(
 );
 ```
 
+## Epic 3 Production Features
+
+### iOS-First Optimizations
+
+**ProMotion 120Hz Support:**
+- Enabled via `CADisableMinimumFrameDurationOnPhone` in Info.plist
+- All animations optimized for 120fps (grid scroll, transitions, overlays)
+- Performance overlay toggle: Long-press "Library" title to enable/disable
+- Target: Zero dropped frames during typical scan workflow
+- See [docs/PROMOTION_120HZ.md](docs/PROMOTION_120HZ.md) for optimization guide
+
+**Native iOS Gestures:**
+- Swipe-back gesture via `CupertinoPageRoute` for all navigation
+- Long-press context menus via `CupertinoActionSheet` (View Details, Edit, Delete, Share)
+- iOS-native haptic patterns using `UIImpactFeedbackGenerator`
+- Pull-to-refresh in library with iOS-style spinner
+
+**iOS Camera Enhancements:**
+- Night Mode: Auto-enabled in low light conditions (yellow moon indicator)
+- Depth sensing: Uses portrait mode depth for improved spine focus
+- Auto exposure compensation: +0.5 to +1.0 for book spines
+- Focus/Exposure lock: Long-press to lock, swipe up/down to adjust exposure
+- Settings persistence via `CameraSettingsService`
+
+**iOS Home Screen Widget:**
+- Small widget: Total books count with Wingtip icon
+- Medium widget: Count + last scanned book cover + date
+- WidgetKit extension in `ios/WingtipWidget/`
+- Widget uses Swiss Utility design (black background, white text, 1px borders)
+- Tapping widget opens app to library view
+- See [WIDGET_SETUP.md](WIDGET_SETUP.md) for Xcode configuration
+
+### Advanced Library Features
+
+**Collections & Tags:**
+- Create custom collections (e.g., "To Read", "Favorites", "Sci-Fi")
+- Long-press book → "Add to Collection" in context menu
+- Collections tab shows list with book count badges
+- Many-to-many relationship: Books can belong to multiple collections
+- Managed via `CollectionsNotifier` with Riverpod
+
+**Multi-Sort & Advanced Filters:**
+- Sort options: Date Added (newest/oldest), Title (A-Z/Z-A), Author (A-Z/Z-A), Spine Confidence (high/low)
+- Filters: Format (All/Hardcover/Paperback/eBook), Review Status (All/Needs Review/Verified), Date Range (All Time/Last Week/Last Month/Custom)
+- Active filter count badge on filter icon
+- Sort preference persisted via SharedPreferences
+- Filter state is session-only (cleared on app restart)
+
+**Statistics Dashboard:**
+- Total Books, Books This Week/Month, Scan Streak (consecutive days)
+- Top authors and formats as simple bar charts
+- Average books per scanning session
+- Accessed via Settings → Stats section
+- Efficient Drift aggregation queries
+
+**Manual Metadata Editing:**
+- Book Detail View shows "Edit" button for review_needed books
+- Editable fields: Title, Author, ISBN, Format
+- Swiss Utility form styling (1px borders, monospace for ISBN)
+- Clears review_needed flag after successful edit
+- Updates via Drift with optimistic UI
+
+### Production Readiness
+
+**Crash Reporting (Sentry):**
+- Sentry integration for production error tracking
+- Custom crash keys: device_id, books_count, active_jobs_count
+- Global error handler for uncaught exceptions
+- Privacy-respecting: No PII in logs
+- Analytics events: scan_started, scan_completed, book_saved
+- See [CRASH_REPORTING.md](CRASH_REPORTING.md) for setup
+
+**Performance Monitoring:**
+- Cold start time tracking (target < 800ms)
+- Shutter latency metrics (target < 30ms)
+- Image processing time (target < 500ms)
+- Memory footprint monitoring
+- Performance dashboard in Debug Settings
+- Metrics color-coded: Green (meeting target), Red (missing target)
+- Rolling averages over last 20 operations
+
+**Memory Optimization:**
+- Image cache limited to 50MB with LRU eviction
+- Proper disposal of camera controllers and streams
+- Memory warning handler: Clears caches on `didReceiveMemoryWarning`
+- Target: < 200MB for typical usage (100+ books, active scanning)
+
+**Session Gamification:**
+- Session counter in top-right corner of camera screen
+- Format: "5 books scanned...", "10 books scanned...", "25 books scanned!"
+- Celebratory pulse animation at milestones: 10, 25, 50, 100 books
+- Resets when app backgrounds or after 5 minutes idle
+- Encourages batch scanning sessions
+
+### Delighter Features
+
+**Spine Transition Animation:**
+- Hero animation: Book cover expands from library thumbnail to detail view
+- Blurred spine background fades in (uses original captured photo)
+- Smooth 300-400ms ease-out curve
+- Connects physical book to digital result visually
+
+**Matrix-Style Stream Overlay:**
+- Transparent overlay at top of camera during active scans
+- Displays real-time SSE messages in green (#00FF00) JetBrains Mono
+- Messages: "Analyzing...", "Found 12 spines...", "Enriching The Martian..."
+- Auto-dismisses 3 seconds after last message
+- Tappable to manually dismiss
+- Semi-transparent black background
+
+**Optimistic Cover Loading:**
+- Cover images prefetched immediately on SSE result event
+- Fade-in + scale animation (300ms) when cache completes
+- Hero animation between grid and detail view
+- Maintains 60fps (120fps on ProMotion) during animation
+
 ## Known Constraints
 
 - Camera permission is required before showing camera screen
@@ -271,3 +422,6 @@ final container = ProviderContainer(
 - SSE timeout is 5 minutes - longer jobs will fail
 - Rate limits are enforced by backend - no client-side bypass
 - Images are resized to max 1920px and compressed to JPEG quality 85
+- iOS widget requires Xcode configuration (see WIDGET_SETUP.md)
+- Sentry DSN must be configured for crash reporting (see CRASH_REPORTING.md)
+- CocoaPods required for iOS builds (Firebase dependencies)

@@ -2,14 +2,34 @@
 
 ## Quick Links
 
-- **[User Stories](user-stories.md)** - MVP feature requirements and user acceptance criteria
+- **[User Stories](user-stories.md)** - Historical MVP feature requirements (Epic 3 complete)
 - **[Verification](verification/)** - Feature verification documents and test results
+- **[TODO](../TODO.md)** - Current status, Epic 3 completion summary, launch readiness
 
 ## Project Information
 
+- **[README](../README.md)** - Project overview, features, setup instructions, and quick start guide
 - **[CLAUDE.md](../CLAUDE.md)** - AI assistant context and comprehensive development guide
-- **[PRD (JSON)](../tasks/prd.json)** - Machine-readable product requirements for task orchestration
-- **[README](../README.md)** - Project overview, setup instructions, and quick start guide
+- **[PRD Epic 3 (JSON)](../tasks/prd-epic3.json)** - Complete product requirements (72 user stories, all complete)
+
+## Epic 3 Features Documentation
+
+### Production Readiness
+- **[CRASH_REPORTING.md](../CRASH_REPORTING.md)** - Sentry integration for production error tracking
+- **[TESTFLIGHT_SETUP.md](../TESTFLIGHT_SETUP.md)** - TestFlight beta testing configuration guide
+- **[BETA_TESTER_EMAIL.md](../BETA_TESTER_EMAIL.md)** - Beta tester welcome email template
+- **[PRIVACY.md](../PRIVACY.md)** - Privacy policy for App Store compliance
+- **[SUPPORT.md](../SUPPORT.md)** - End-user support documentation
+
+### iOS-Specific Features
+- **[WIDGET_SETUP.md](../WIDGET_SETUP.md)** - iOS Home Screen widget Xcode configuration
+- **[PROMOTION_120HZ.md](PROMOTION_120HZ.md)** - ProMotion 120Hz optimization guide and debugging
+
+### App Store Materials
+- **[App Store Assets](../assets/app-store/)** - Screenshots, video script, metadata, submission checklist
+  - [README](../assets/app-store/README.md) - Overview of App Store materials
+  - [SUBMISSION-CHECKLIST.md](../assets/app-store/SUBMISSION-CHECKLIST.md) - Pre-submission verification
+  - [QUICK-REFERENCE.md](../assets/app-store/QUICK-REFERENCE.md) - Key app details for marketing
 
 ## Architecture
 
@@ -95,8 +115,11 @@ See [CLAUDE.md - Common Development Tasks](../CLAUDE.md#common-development-tasks
 
 ## Performance Targets
 
-- Cold start: < 1000ms to live camera
+- Cold start: < 800ms to live camera ✅ (Epic 3 optimized)
+- Shutter latency: < 30ms tap-to-haptic ✅ (Epic 3 optimized)
 - Image processing: < 500ms per image (background isolate)
+- ProMotion: 120fps on iPhone Pro devices ✅ (Epic 3 optimized)
+- Memory footprint: < 200MB typical usage ✅ (Epic 3 optimized)
 - SSE timeout: 5 minutes maximum job duration
 - Image specs: Resized to max 1920px, compressed to JPEG quality 85
 
