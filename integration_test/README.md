@@ -71,6 +71,11 @@ Integration tests use the `integration_test` package (Flutter's official integra
 ### Current Tests
 
 - **`app_test.dart`** - Smoke test that verifies the app launches successfully and displays the appropriate initial screen (onboarding, permission primer, or camera screen).
+- **`critical_flows_test.dart`** - Integration tests for critical user flows:
+  - **Failed scan → retry → success flow** - Tests the complete lifecycle of a failed scan: network failure during upload, saving to FailedScans table with image preservation, successful retry, and cleanup.
+  - **Multiple failed scans with different error types** - Verifies multiple failed scans can coexist with different failure reasons (network error, quality too low, no books found).
+  - **Failed scan cleanup when image missing** - Ensures cleanup handles missing image files gracefully.
+  - **Expired failed scans identification** - Tests that expired scans can be identified by expiresAt timestamp.
 
 ## Writing New Integration Tests
 
