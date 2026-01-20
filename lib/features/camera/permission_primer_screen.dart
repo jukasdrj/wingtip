@@ -3,13 +3,55 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_screen.dart';
 
-class PermissionPrimerScreen extends StatelessWidget {
+class PermissionPrimerScreen extends StatefulWidget {
   const PermissionPrimerScreen({super.key});
 
-  Future<void> _handleGrantAccess(BuildContext context) async {
+  @override
+  State<PermissionPrimerScreen> createState() => _PermissionPrimerScreenState();
+}
+
+class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Check permission status on first load
+    _checkPermissionStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When app returns to foreground (e.g., from Settings), check permission
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissionStatus();
+    }
+  }
+
+  Future<void> _checkPermissionStatus() async {
+    final status = await Permission.camera.status;
+
+    if (!mounted) return;
+
+    if (status.isGranted) {
+      // Permission granted, navigate to camera screen
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const CameraScreen(),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleGrantAccess() async {
     final status = await Permission.camera.request();
 
-    if (!context.mounted) return;
+    if (!mounted) return;
 
     if (status.isGranted) {
       // Permission granted, navigate to camera screen
@@ -20,15 +62,14 @@ class PermissionPrimerScreen extends StatelessWidget {
       );
     } else if (status.isDenied) {
       // Permission denied, show explanation
-      _showPermissionDeniedDialog(context, isDenied: true);
+      _showPermissionDeniedDialog(isDenied: true);
     } else if (status.isPermanentlyDenied) {
       // Permission permanently denied, show settings dialog
-      _showPermissionDeniedDialog(context, isPermanentlyDenied: true);
+      _showPermissionDeniedDialog(isPermanentlyDenied: true);
     }
   }
 
-  void _showPermissionDeniedDialog(
-    BuildContext context, {
+  void _showPermissionDeniedDialog({
     bool isDenied = false,
     bool isPermanentlyDenied = false,
   }) {
@@ -61,7 +102,7 @@ class PermissionPrimerScreen extends StatelessWidget {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _handleGrantAccess(context);
+                  _handleGrantAccess();
                 },
                 child: const Text('Try Again'),
               ),
@@ -120,7 +161,7 @@ class PermissionPrimerScreen extends StatelessWidget {
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () => _handleGrantAccess(context),
+                  onPressed: _handleGrantAccess,
                   child: const Text('Grant Access'),
                 ),
               ),
