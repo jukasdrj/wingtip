@@ -365,4 +365,163 @@ void main() {
       },
     );
   });
+
+  group('Critical Flows - Collections Management', () {
+    late AppDatabase database;
+    late ProviderContainer container;
+
+    setUp(() async {
+      // Create in-memory database for testing
+      database = AppDatabase.test(NativeDatabase.memory());
+
+      // Create provider container with test database
+      container = ProviderContainer(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+        ],
+      );
+    });
+
+    tearDown(() async {
+      await database.close();
+      container.dispose();
+    });
+
+    testWidgets(
+      'Collections management flow: create → add books → filter → remove',
+      (WidgetTester tester) async {
+        // STEP 1: Create test books in the database
+        final testBooks = [
+          BooksCompanion.insert(
+            isbn: '978-0-111111-11-1',
+            title: 'The Fellowship of the Ring',
+            author: 'J.R.R. Tolkien',
+            coverUrl: const Value('https://example.com/lotr1.jpg'),
+            format: const Value('Hardcover'),
+            addedDate: DateTime.now().millisecondsSinceEpoch,
+            spineConfidence: const Value(0.92),
+          ),
+          BooksCompanion.insert(
+            isbn: '978-0-222222-22-2',
+            title: 'The Two Towers',
+            author: 'J.R.R. Tolkien',
+            coverUrl: const Value('https://example.com/lotr2.jpg'),
+            format: const Value('Hardcover'),
+            addedDate: DateTime.now().millisecondsSinceEpoch,
+            spineConfidence: const Value(0.89),
+          ),
+          BooksCompanion.insert(
+            isbn: '978-0-333333-33-3',
+            title: 'The Return of the King',
+            author: 'J.R.R. Tolkien',
+            coverUrl: const Value('https://example.com/lotr3.jpg'),
+            format: const Value('Hardcover'),
+            addedDate: DateTime.now().millisecondsSinceEpoch,
+            spineConfidence: const Value(0.95),
+          ),
+        ];
+
+        for (final book in testBooks) {
+          await database.into(database.books).insertOnConflictUpdate(book);
+        }
+
+        // Verify books were saved
+        final allBooks = await database.select(database.books).get();
+        expect(allBooks.length, 3);
+        debugPrint('[Test] Created 3 test books');
+
+        // STEP 2: Create a new collection via database API
+        final collectionId = await database.createCollection('LOTR Collection');
+        expect(collectionId, greaterThan(0));
+        debugPrint('[Test] Created collection with ID: $collectionId');
+
+        // Verify collection was created
+        final collections = await database.select(database.collections).get();
+        expect(collections.length, 1);
+        expect(collections.first.name, 'LOTR Collection');
+        expect(collections.first.id, collectionId);
+        debugPrint('[Test] ✅ Collection created successfully');
+
+        // STEP 3: Add books to the collection
+        await database.addBookToCollection('978-0-111111-11-1', collectionId);
+        await database.addBookToCollection('978-0-222222-22-2', collectionId);
+        await database.addBookToCollection('978-0-333333-33-3', collectionId);
+
+        // Verify books were added to collection
+        final bookCollections = await database.select(database.bookCollections).get();
+        expect(bookCollections.length, 3);
+        debugPrint('[Test] ✅ Added 3 books to collection');
+
+        // STEP 4: Verify book count badge via watchCollectionsWithCounts
+        final collectionsWithCounts = await database.watchCollectionsWithCounts().first;
+        expect(collectionsWithCounts.length, 1);
+        expect(collectionsWithCounts.first.bookCount, 3);
+        expect(collectionsWithCounts.first.name, 'LOTR Collection');
+        debugPrint('[Test] ✅ Collection book count badge shows 3 books');
+
+        // STEP 5: Filter library by collection and verify only collection books show
+        final booksInCollection = await database.watchBooksInCollection(collectionId).first;
+        expect(booksInCollection.length, 3);
+
+        // Verify correct books are in the collection
+        final isbnSet = booksInCollection.map((b) => b.isbn).toSet();
+        expect(isbnSet.contains('978-0-111111-11-1'), true);
+        expect(isbnSet.contains('978-0-222222-22-2'), true);
+        expect(isbnSet.contains('978-0-333333-33-3'), true);
+        debugPrint('[Test] ✅ Filter by collection shows only collection books');
+
+        // STEP 6: Remove one book from collection
+        await database.removeBookFromCollection('978-0-222222-22-2', collectionId);
+
+        // Verify book was removed from collection
+        final updatedBookCollections = await database.select(database.bookCollections).get();
+        expect(updatedBookCollections.length, 2);
+        debugPrint('[Test] ✅ Removed 1 book from collection');
+
+        // STEP 7: Verify updated book count
+        final updatedCollectionsWithCounts = await database.watchCollectionsWithCounts().first;
+        expect(updatedCollectionsWithCounts.first.bookCount, 2);
+        debugPrint('[Test] ✅ Collection book count badge updated to 2 books');
+
+        // STEP 8: Verify updated collection filter results
+        final updatedBooksInCollection = await database.watchBooksInCollection(collectionId).first;
+        expect(updatedBooksInCollection.length, 2);
+
+        final updatedIsbnSet = updatedBooksInCollection.map((b) => b.isbn).toSet();
+        expect(updatedIsbnSet.contains('978-0-111111-11-1'), true);
+        expect(updatedIsbnSet.contains('978-0-222222-22-2'), false); // Removed
+        expect(updatedIsbnSet.contains('978-0-333333-33-3'), true);
+        debugPrint('[Test] ✅ Collection filter shows updated book list');
+
+        // STEP 9: Verify original book still exists in library (not deleted, just removed from collection)
+        final finalAllBooks = await database.select(database.books).get();
+        expect(finalAllBooks.length, 3); // All books still exist
+        debugPrint('[Test] ✅ Book removed from collection but still exists in library');
+
+        // STEP 10: Test multiple collections - create second collection and add one book
+        final secondCollectionId = await database.createCollection('Favorites');
+        await database.addBookToCollection('978-0-111111-11-1', secondCollectionId);
+
+        // Verify book can belong to multiple collections
+        final collectionsForBook = await database.getCollectionsForBook('978-0-111111-11-1');
+        expect(collectionsForBook.length, 2);
+        debugPrint('[Test] ✅ Book can belong to multiple collections');
+
+        // STEP 11: Verify final state
+        final finalCollections = await database.watchCollectionsWithCounts().first;
+        expect(finalCollections.length, 2);
+        expect(finalCollections[0].name, 'Favorites'); // Newest first (ordered by created_at DESC)
+        expect(finalCollections[0].bookCount, 1);
+        expect(finalCollections[1].name, 'LOTR Collection');
+        expect(finalCollections[1].bookCount, 2);
+
+        debugPrint('[Test] ✅ Collections management flow completed successfully');
+        debugPrint('[Test] Summary:');
+        debugPrint('  - Created 2 collections');
+        debugPrint('  - Added/removed books from collections');
+        debugPrint('  - Verified book counts and filtering');
+        debugPrint('  - Confirmed many-to-many relationships work correctly');
+      },
+    );
+  });
 }
