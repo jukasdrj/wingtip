@@ -207,17 +207,24 @@ class _MyAppState extends State<MyApp> {
   }
 
   Widget _determineHomeScreen() {
+    // Debug logging for startup flow
+    debugPrint('[Startup] Onboarding completed: ${widget.onboardingCompleted}');
+    debugPrint('[Startup] Camera permission granted: ${widget.hasPermission}');
+
     // If onboarding not completed, show onboarding first
     if (!widget.onboardingCompleted) {
+      debugPrint('[Startup] Showing OnboardingScreen');
       return const OnboardingScreen();
     }
 
     // If onboarding completed but no camera permission, show permission primer
     if (!widget.hasPermission) {
+      debugPrint('[Startup] Showing PermissionPrimerScreen');
       return const PermissionPrimerScreen();
     }
 
     // If onboarding completed and permission granted, show camera screen
+    debugPrint('[Startup] Showing CameraScreen');
     return const CameraScreen();
   }
 
