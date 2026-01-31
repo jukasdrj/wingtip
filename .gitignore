@@ -56,3 +56,4 @@ doc_audit_*.md
 
 # Environment variables (never commit secrets!)
 .env
+.mcp.json
