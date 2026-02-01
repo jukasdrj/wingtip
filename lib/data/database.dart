@@ -20,7 +20,8 @@ class Books extends Table {
   IntColumn get addedDate => integer()();
   RealColumn get spineConfidence => real().nullable()();
   BoolColumn get reviewNeeded => boolean().withDefault(const Constant(false))();
-  TextColumn get spineImagePath => text().nullable()(); // Path to original captured spine image
+  TextColumn get spineImagePath =>
+      text().nullable()(); // Path to original captured spine image
 
   @override
   Set<Column> get primaryKey => {isbn};
@@ -59,7 +60,9 @@ class FailedScans extends Table {
   TextColumn get jobId => text()();
   TextColumn get imagePath => text()();
   TextColumn get errorMessage => text()();
-  TextColumn get failureReason => textEnum<FailureReason>().withDefault(Constant(FailureReason.unknown.name))();
+  TextColumn get failureReason => textEnum<FailureReason>().withDefault(
+    Constant(FailureReason.unknown.name),
+  )();
   IntColumn get createdAt => integer()();
   IntColumn get expiresAt => integer()();
 }
@@ -81,14 +84,28 @@ class BookCollections extends Table {
   Set<Column> get primaryKey => {isbn, collectionId};
 }
 
-@DriftDatabase(tables: [Books, FailedScans, Collections, BookCollections])
+@DataClassName('ReviewQueueItem')
+class ReviewQueue extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get imagePath => text()();
+  // Status: 'processing_local', 'processing_backend', 'ready', 'error'
+  TextColumn get status =>
+      text().withDefault(const Constant('processing_local'))();
+  TextColumn get mlResult => text().nullable()(); // JSON
+  TextColumn get backendResult => text().nullable()(); // JSON
+  IntColumn get createdAt => integer()();
+}
+
+@DriftDatabase(
+  tables: [Books, FailedScans, Collections, BookCollections, ReviewQueue],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   AppDatabase.test(super.executor);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -102,15 +119,13 @@ class AppDatabase extends _$AppDatabase {
         );
 
         // Create FTS5 virtual table for full-text search
-        await customStatement(
-          '''CREATE VIRTUAL TABLE books_fts USING fts5(
+        await customStatement('''CREATE VIRTUAL TABLE books_fts USING fts5(
             isbn,
             title,
             author,
             content=books,
             content_rowid=rowid
-          )''',
-        );
+          )''');
 
         // Create triggers to keep FTS5 table in sync
         await customStatement(
@@ -139,15 +154,13 @@ class AppDatabase extends _$AppDatabase {
       onUpgrade: (Migrator m, int from, int to) async {
         if (from < 2) {
           // Create FTS5 virtual table for full-text search
-          await customStatement(
-            '''CREATE VIRTUAL TABLE books_fts USING fts5(
+          await customStatement('''CREATE VIRTUAL TABLE books_fts USING fts5(
               isbn,
               title,
               author,
               content=books,
               content_rowid=rowid
-            )''',
-          );
+            )''');
 
           // Populate FTS table with existing data
           await customStatement(
@@ -196,6 +209,10 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(collections);
           await m.createTable(bookCollections);
         }
+        if (from < 7) {
+          // Add ReviewQueue table
+          await m.createTable(reviewQueue);
+        }
       },
     );
   }
@@ -234,17 +251,21 @@ class AppDatabase extends _$AppDatabase {
         break;
       case SortOption.spineConfidenceHigh:
         // NULLS LAST for descending confidence
-        terms.add((t) => OrderingTerm(
-          expression: t.spineConfidence,
-          mode: OrderingMode.desc,
-        ));
+        terms.add(
+          (t) => OrderingTerm(
+            expression: t.spineConfidence,
+            mode: OrderingMode.desc,
+          ),
+        );
         break;
       case SortOption.spineConfidenceLow:
         // NULLS LAST for ascending confidence
-        terms.add((t) => OrderingTerm(
-          expression: t.spineConfidence,
-          mode: OrderingMode.asc,
-        ));
+        terms.add(
+          (t) => OrderingTerm(
+            expression: t.spineConfidence,
+            mode: OrderingMode.asc,
+          ),
+        );
         break;
     }
 
@@ -313,7 +334,9 @@ class AppDatabase extends _$AppDatabase {
       // Review status filter (from FilterState)
       if (filterState.reviewStatus != null) {
         whereClauses.add('b.review_needed = ?');
-        variables.add(Variable.withBool(filterState.reviewStatus!.reviewNeededValue));
+        variables.add(
+          Variable.withBool(filterState.reviewStatus!.reviewNeededValue),
+        );
       }
 
       // Date range filter
@@ -321,11 +344,19 @@ class AppDatabase extends _$AppDatabase {
         if (filterState.dateRange == DateRange.custom) {
           if (filterState.customStartDate != null) {
             whereClauses.add('b.added_date >= ?');
-            variables.add(Variable.withInt(filterState.customStartDate!.millisecondsSinceEpoch));
+            variables.add(
+              Variable.withInt(
+                filterState.customStartDate!.millisecondsSinceEpoch,
+              ),
+            );
           }
           if (filterState.customEndDate != null) {
             whereClauses.add('b.added_date <= ?');
-            variables.add(Variable.withInt(filterState.customEndDate!.millisecondsSinceEpoch));
+            variables.add(
+              Variable.withInt(
+                filterState.customEndDate!.millisecondsSinceEpoch,
+              ),
+            );
           }
         } else {
           final startTimestamp = filterState.dateRange.getStartTimestamp();
@@ -347,15 +378,16 @@ class AppDatabase extends _$AppDatabase {
         sortReviewFirst: sortReviewFirst,
       );
 
-      final resultStream = customSelect(
-        '''SELECT b.* FROM books b
+      final resultStream =
+          customSelect(
+            '''SELECT b.* FROM books b
            $whereClause
            $orderByClause''',
-        variables: variables,
-        readsFrom: {books},
-      ).watch().map((rows) {
-        return rows.map((row) => books.map(row.data)).toList();
-      });
+            variables: variables,
+            readsFrom: {books},
+          ).watch().map((rows) {
+            return rows.map((row) => books.map(row.data)).toList();
+          });
 
       // Apply format filter in Dart (since format matching is complex)
       if (filterState.format != null) {
@@ -376,10 +408,12 @@ class AppDatabase extends _$AppDatabase {
       query.where((t) => t.reviewNeeded.equals(reviewNeeded));
     }
 
-    query.orderBy(_buildOrderByTerms(
-      sortOption: sortOption,
-      sortReviewFirst: sortReviewFirst,
-    ));
+    query.orderBy(
+      _buildOrderByTerms(
+        sortOption: sortOption,
+        sortReviewFirst: sortReviewFirst,
+      ),
+    );
 
     return query.watch();
   }
@@ -395,10 +429,12 @@ class AppDatabase extends _$AppDatabase {
       query.where((t) => t.reviewNeeded.equals(reviewNeeded));
     }
 
-    query.orderBy(_buildOrderByTerms(
-      sortOption: sortOption,
-      sortReviewFirst: sortReviewFirst,
-    ));
+    query.orderBy(
+      _buildOrderByTerms(
+        sortOption: sortOption,
+        sortReviewFirst: sortReviewFirst,
+      ),
+    );
 
     return query.get();
   }
@@ -411,7 +447,8 @@ class AppDatabase extends _$AppDatabase {
     SortOption sortOption = SortOption.dateAddedNewest,
     FilterState? filterState,
   }) {
-    if (query.isEmpty && (filterState == null || !filterState.hasActiveFilters)) {
+    if (query.isEmpty &&
+        (filterState == null || !filterState.hasActiveFilters)) {
       return watchAllBooks(
         reviewNeeded: reviewNeeded,
         sortReviewFirst: sortReviewFirst,
@@ -449,7 +486,9 @@ class AppDatabase extends _$AppDatabase {
       // Review status filter
       if (filterState.reviewStatus != null) {
         whereClauses.add('b.review_needed = ?');
-        variables.add(Variable.withBool(filterState.reviewStatus!.reviewNeededValue));
+        variables.add(
+          Variable.withBool(filterState.reviewStatus!.reviewNeededValue),
+        );
       }
 
       // Date range filter
@@ -457,11 +496,19 @@ class AppDatabase extends _$AppDatabase {
         if (filterState.dateRange == DateRange.custom) {
           if (filterState.customStartDate != null) {
             whereClauses.add('b.added_date >= ?');
-            variables.add(Variable.withInt(filterState.customStartDate!.millisecondsSinceEpoch));
+            variables.add(
+              Variable.withInt(
+                filterState.customStartDate!.millisecondsSinceEpoch,
+              ),
+            );
           }
           if (filterState.customEndDate != null) {
             whereClauses.add('b.added_date <= ?');
-            variables.add(Variable.withInt(filterState.customEndDate!.millisecondsSinceEpoch));
+            variables.add(
+              Variable.withInt(
+                filterState.customEndDate!.millisecondsSinceEpoch,
+              ),
+            );
           }
         } else {
           final startTimestamp = filterState.dateRange.getStartTimestamp();
@@ -491,15 +538,16 @@ class AppDatabase extends _$AppDatabase {
         : 'FROM books b';
 
     // Use FTS5 MATCH query with prefix matching
-    final resultStream = customSelect(
-      '''SELECT b.* $fromClause
+    final resultStream =
+        customSelect(
+          '''SELECT b.* $fromClause
          $whereClause
          $orderByClause''',
-      variables: variables,
-      readsFrom: {books},
-    ).watch().map((rows) {
-      return rows.map((row) => books.map(row.data)).toList();
-    });
+          variables: variables,
+          readsFrom: {books},
+        ).watch().map((rows) {
+          return rows.map((row) => books.map(row.data)).toList();
+        });
 
     // Apply format filter in Dart (since format matching is complex)
     if (filterState?.format != null) {
@@ -546,7 +594,10 @@ class AppDatabase extends _$AppDatabase {
 
     // Build variables list
     final variables = reviewNeeded != null
-        ? [Variable.withString('$escapedQuery*'), Variable.withBool(reviewNeeded)]
+        ? [
+            Variable.withString('$escapedQuery*'),
+            Variable.withBool(reviewNeeded),
+          ]
         : [Variable.withString('$escapedQuery*')];
 
     return customSelect(
@@ -640,8 +691,60 @@ class AppDatabase extends _$AppDatabase {
       reviewNeeded: Value(clearReviewNeeded ? false : true),
     );
 
-    final updated = await (update(books)..where((t) => t.isbn.equals(isbn))).write(companion);
+    final updated = await (update(
+      books,
+    )..where((t) => t.isbn.equals(isbn))).write(companion);
     return updated > 0;
+  }
+
+  // Review Queue Methods
+
+  Future<int> addToReviewQueue({
+    required String imagePath,
+    String status = 'processing_local',
+  }) async {
+    final companion = ReviewQueueCompanion(
+      imagePath: Value(imagePath),
+      status: Value(status),
+      createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+    );
+    return await into(reviewQueue).insert(companion);
+  }
+
+  Stream<List<ReviewQueueItem>> watchReviewQueue() {
+    return (select(
+      reviewQueue,
+    )..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).watch();
+  }
+
+  Future<ReviewQueueItem?> getReviewQueueItem(int id) {
+    return (select(
+      reviewQueue,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<bool> updateReviewQueueItem({
+    required int id,
+    String? status,
+    String? mlResult,
+    String? backendResult,
+  }) async {
+    final companion = ReviewQueueCompanion(
+      id: Value(id),
+      status: status != null ? Value(status) : const Value.absent(),
+      mlResult: mlResult != null ? Value(mlResult) : const Value.absent(),
+      backendResult: backendResult != null
+          ? Value(backendResult)
+          : const Value.absent(),
+    );
+    final count = await (update(
+      reviewQueue,
+    )..where((t) => t.id.equals(id))).write(companion);
+    return count > 0;
+  }
+
+  Future<int> deleteReviewQueueItem(int id) {
+    return (delete(reviewQueue)..where((t) => t.id.equals(id))).go();
   }
 
   // Collection Management Methods
@@ -710,13 +813,16 @@ class AppDatabase extends _$AppDatabase {
       collectionId: Value(collectionId),
       addedAt: Value(DateTime.now().millisecondsSinceEpoch),
     );
-    await into(bookCollections).insert(companion, mode: InsertMode.insertOrIgnore);
+    await into(
+      bookCollections,
+    ).insert(companion, mode: InsertMode.insertOrIgnore);
   }
 
   // Remove book from collection
   Future<void> removeBookFromCollection(String isbn, int collectionId) async {
-    await (delete(bookCollections)
-          ..where((t) => t.isbn.equals(isbn) & t.collectionId.equals(collectionId)))
+    await (delete(bookCollections)..where(
+          (t) => t.isbn.equals(isbn) & t.collectionId.equals(collectionId),
+        ))
         .go();
   }
 
@@ -737,7 +843,9 @@ class AppDatabase extends _$AppDatabase {
 
   // Delete a collection (cascade delete book_collections)
   Future<void> deleteCollection(int collectionId) async {
-    await (delete(bookCollections)..where((t) => t.collectionId.equals(collectionId))).go();
+    await (delete(
+      bookCollections,
+    )..where((t) => t.collectionId.equals(collectionId))).go();
     await (delete(collections)..where((t) => t.id.equals(collectionId))).go();
   }
 
@@ -747,7 +855,9 @@ class AppDatabase extends _$AppDatabase {
       id: Value(collectionId),
       name: Value(newName),
     );
-    final updated = await (update(collections)..where((t) => t.id.equals(collectionId))).write(companion);
+    final updated = await (update(
+      collections,
+    )..where((t) => t.id.equals(collectionId))).write(companion);
     return updated > 0;
   }
 
@@ -755,8 +865,7 @@ class AppDatabase extends _$AppDatabase {
 
   // Get total number of books
   Future<int> getTotalBooksCount() async {
-    final countQuery = selectOnly(books)
-      ..addColumns([books.isbn.count()]);
+    final countQuery = selectOnly(books)..addColumns([books.isbn.count()]);
     final result = await countQuery.getSingle();
     return result.read(books.isbn.count()) ?? 0;
   }
@@ -768,7 +877,10 @@ class AppDatabase extends _$AppDatabase {
 
     final countQuery = selectOnly(books)
       ..addColumns([books.isbn.count()])
-      ..where(books.addedDate.isBiggerOrEqualValue(startMs) & books.addedDate.isSmallerOrEqualValue(endMs));
+      ..where(
+        books.addedDate.isBiggerOrEqualValue(startMs) &
+            books.addedDate.isSmallerOrEqualValue(endMs),
+      );
     final result = await countQuery.getSingle();
     return result.read(books.isbn.count()) ?? 0;
   }
@@ -820,8 +932,9 @@ class AppDatabase extends _$AppDatabase {
 
   // Get scanning streak (consecutive days with books added)
   Future<int> getScanningStreak() async {
-    final allBooks = await (select(books)
-      ..orderBy([(t) => OrderingTerm.desc(t.addedDate)])).get();
+    final allBooks = await (select(
+      books,
+    )..orderBy([(t) => OrderingTerm.desc(t.addedDate)])).get();
 
     if (allBooks.isEmpty) return 0;
 
@@ -849,7 +962,10 @@ class AppDatabase extends _$AppDatabase {
         checkDate = checkDate.subtract(const Duration(days: 1));
       } else if (date.isBefore(checkDate)) {
         // Gap found, but check if it's the first iteration and we're checking yesterday
-        if (streak == 0 && date.isAtSameMomentAs(checkDate.subtract(const Duration(days: 1)))) {
+        if (streak == 0 &&
+            date.isAtSameMomentAs(
+              checkDate.subtract(const Duration(days: 1)),
+            )) {
           streak++;
           checkDate = date.subtract(const Duration(days: 1));
         } else {
@@ -863,8 +979,9 @@ class AppDatabase extends _$AppDatabase {
 
   // Get books added per scanning session (approximation based on time clustering)
   Future<double> getAverageBooksPerSession() async {
-    final allBooks = await (select(books)
-      ..orderBy([(t) => OrderingTerm.asc(t.addedDate)])).get();
+    final allBooks = await (select(
+      books,
+    )..orderBy([(t) => OrderingTerm.asc(t.addedDate)])).get();
 
     if (allBooks.isEmpty) return 0.0;
     if (allBooks.length == 1) return 1.0;
@@ -874,8 +991,12 @@ class AppDatabase extends _$AppDatabase {
     int sessionCount = 1;
 
     for (int i = 1; i < allBooks.length; i++) {
-      final prevTime = DateTime.fromMillisecondsSinceEpoch(allBooks[i - 1].addedDate);
-      final currTime = DateTime.fromMillisecondsSinceEpoch(allBooks[i].addedDate);
+      final prevTime = DateTime.fromMillisecondsSinceEpoch(
+        allBooks[i - 1].addedDate,
+      );
+      final currTime = DateTime.fromMillisecondsSinceEpoch(
+        allBooks[i].addedDate,
+      );
       final diff = currTime.difference(prevTime);
 
       if (diff.inMinutes > sessionGapMinutes) {
@@ -907,10 +1028,7 @@ class AuthorStats {
   final String author;
   final int bookCount;
 
-  AuthorStats({
-    required this.author,
-    required this.bookCount,
-  });
+  AuthorStats({required this.author, required this.bookCount});
 }
 
 // Helper class for format statistics
@@ -918,10 +1036,7 @@ class FormatStats {
   final String format;
   final int bookCount;
 
-  FormatStats({
-    required this.format,
-    required this.bookCount,
-  });
+  FormatStats({required this.format, required this.bookCount});
 }
 
 LazyDatabase _openConnection() {
@@ -940,11 +1055,19 @@ LazyDatabase _openConnection() {
       file,
       setup: (database) {
         // Performance optimizations for SQLite
-        database.execute('PRAGMA journal_mode = WAL'); // Write-Ahead Logging for better concurrency
+        database.execute(
+          'PRAGMA journal_mode = WAL',
+        ); // Write-Ahead Logging for better concurrency
         database.execute('PRAGMA synchronous = NORMAL'); // Faster commits
-        database.execute('PRAGMA temp_store = MEMORY'); // Use memory for temp tables
-        database.execute('PRAGMA mmap_size = 30000000'); // 30MB memory-mapped I/O
-        database.execute('PRAGMA page_size = 4096'); // Optimal page size for iOS
+        database.execute(
+          'PRAGMA temp_store = MEMORY',
+        ); // Use memory for temp tables
+        database.execute(
+          'PRAGMA mmap_size = 30000000',
+        ); // 30MB memory-mapped I/O
+        database.execute(
+          'PRAGMA page_size = 4096',
+        ); // Optimal page size for iOS
 
         // Verify FTS5 is available
         database.execute('PRAGMA compile_options');
@@ -952,7 +1075,9 @@ LazyDatabase _openConnection() {
     );
 
     final initDuration = DateTime.now().difference(initStart);
-    debugPrint('[Database] Opened database in ${initDuration.inMilliseconds}ms');
+    debugPrint(
+      '[Database] Opened database in ${initDuration.inMilliseconds}ms',
+    );
 
     return db;
   });

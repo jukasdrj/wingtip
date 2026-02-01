@@ -1566,6 +1566,411 @@ class BookCollectionsCompanion extends UpdateCompanion<BookCollection> {
   }
 }
 
+class $ReviewQueueTable extends ReviewQueue
+    with TableInfo<$ReviewQueueTable, ReviewQueueItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ReviewQueueTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _imagePathMeta = const VerificationMeta(
+    'imagePath',
+  );
+  @override
+  late final GeneratedColumn<String> imagePath = GeneratedColumn<String>(
+    'image_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('processing_local'),
+  );
+  static const VerificationMeta _mlResultMeta = const VerificationMeta(
+    'mlResult',
+  );
+  @override
+  late final GeneratedColumn<String> mlResult = GeneratedColumn<String>(
+    'ml_result',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _backendResultMeta = const VerificationMeta(
+    'backendResult',
+  );
+  @override
+  late final GeneratedColumn<String> backendResult = GeneratedColumn<String>(
+    'backend_result',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    imagePath,
+    status,
+    mlResult,
+    backendResult,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'review_queue';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ReviewQueueItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('image_path')) {
+      context.handle(
+        _imagePathMeta,
+        imagePath.isAcceptableOrUnknown(data['image_path']!, _imagePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_imagePathMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('ml_result')) {
+      context.handle(
+        _mlResultMeta,
+        mlResult.isAcceptableOrUnknown(data['ml_result']!, _mlResultMeta),
+      );
+    }
+    if (data.containsKey('backend_result')) {
+      context.handle(
+        _backendResultMeta,
+        backendResult.isAcceptableOrUnknown(
+          data['backend_result']!,
+          _backendResultMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ReviewQueueItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ReviewQueueItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      imagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_path'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      mlResult: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ml_result'],
+      ),
+      backendResult: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}backend_result'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ReviewQueueTable createAlias(String alias) {
+    return $ReviewQueueTable(attachedDatabase, alias);
+  }
+}
+
+class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
+  final int id;
+  final String imagePath;
+  final String status;
+  final String? mlResult;
+  final String? backendResult;
+  final int createdAt;
+  const ReviewQueueItem({
+    required this.id,
+    required this.imagePath,
+    required this.status,
+    this.mlResult,
+    this.backendResult,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['image_path'] = Variable<String>(imagePath);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || mlResult != null) {
+      map['ml_result'] = Variable<String>(mlResult);
+    }
+    if (!nullToAbsent || backendResult != null) {
+      map['backend_result'] = Variable<String>(backendResult);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  ReviewQueueCompanion toCompanion(bool nullToAbsent) {
+    return ReviewQueueCompanion(
+      id: Value(id),
+      imagePath: Value(imagePath),
+      status: Value(status),
+      mlResult: mlResult == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mlResult),
+      backendResult: backendResult == null && nullToAbsent
+          ? const Value.absent()
+          : Value(backendResult),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ReviewQueueItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ReviewQueueItem(
+      id: serializer.fromJson<int>(json['id']),
+      imagePath: serializer.fromJson<String>(json['imagePath']),
+      status: serializer.fromJson<String>(json['status']),
+      mlResult: serializer.fromJson<String?>(json['mlResult']),
+      backendResult: serializer.fromJson<String?>(json['backendResult']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'imagePath': serializer.toJson<String>(imagePath),
+      'status': serializer.toJson<String>(status),
+      'mlResult': serializer.toJson<String?>(mlResult),
+      'backendResult': serializer.toJson<String?>(backendResult),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  ReviewQueueItem copyWith({
+    int? id,
+    String? imagePath,
+    String? status,
+    Value<String?> mlResult = const Value.absent(),
+    Value<String?> backendResult = const Value.absent(),
+    int? createdAt,
+  }) => ReviewQueueItem(
+    id: id ?? this.id,
+    imagePath: imagePath ?? this.imagePath,
+    status: status ?? this.status,
+    mlResult: mlResult.present ? mlResult.value : this.mlResult,
+    backendResult: backendResult.present
+        ? backendResult.value
+        : this.backendResult,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  ReviewQueueItem copyWithCompanion(ReviewQueueCompanion data) {
+    return ReviewQueueItem(
+      id: data.id.present ? data.id.value : this.id,
+      imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
+      status: data.status.present ? data.status.value : this.status,
+      mlResult: data.mlResult.present ? data.mlResult.value : this.mlResult,
+      backendResult: data.backendResult.present
+          ? data.backendResult.value
+          : this.backendResult,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ReviewQueueItem(')
+          ..write('id: $id, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('status: $status, ')
+          ..write('mlResult: $mlResult, ')
+          ..write('backendResult: $backendResult, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, imagePath, status, mlResult, backendResult, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ReviewQueueItem &&
+          other.id == this.id &&
+          other.imagePath == this.imagePath &&
+          other.status == this.status &&
+          other.mlResult == this.mlResult &&
+          other.backendResult == this.backendResult &&
+          other.createdAt == this.createdAt);
+}
+
+class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
+  final Value<int> id;
+  final Value<String> imagePath;
+  final Value<String> status;
+  final Value<String?> mlResult;
+  final Value<String?> backendResult;
+  final Value<int> createdAt;
+  const ReviewQueueCompanion({
+    this.id = const Value.absent(),
+    this.imagePath = const Value.absent(),
+    this.status = const Value.absent(),
+    this.mlResult = const Value.absent(),
+    this.backendResult = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ReviewQueueCompanion.insert({
+    this.id = const Value.absent(),
+    required String imagePath,
+    this.status = const Value.absent(),
+    this.mlResult = const Value.absent(),
+    this.backendResult = const Value.absent(),
+    required int createdAt,
+  }) : imagePath = Value(imagePath),
+       createdAt = Value(createdAt);
+  static Insertable<ReviewQueueItem> custom({
+    Expression<int>? id,
+    Expression<String>? imagePath,
+    Expression<String>? status,
+    Expression<String>? mlResult,
+    Expression<String>? backendResult,
+    Expression<int>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (imagePath != null) 'image_path': imagePath,
+      if (status != null) 'status': status,
+      if (mlResult != null) 'ml_result': mlResult,
+      if (backendResult != null) 'backend_result': backendResult,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ReviewQueueCompanion copyWith({
+    Value<int>? id,
+    Value<String>? imagePath,
+    Value<String>? status,
+    Value<String?>? mlResult,
+    Value<String?>? backendResult,
+    Value<int>? createdAt,
+  }) {
+    return ReviewQueueCompanion(
+      id: id ?? this.id,
+      imagePath: imagePath ?? this.imagePath,
+      status: status ?? this.status,
+      mlResult: mlResult ?? this.mlResult,
+      backendResult: backendResult ?? this.backendResult,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (imagePath.present) {
+      map['image_path'] = Variable<String>(imagePath.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (mlResult.present) {
+      map['ml_result'] = Variable<String>(mlResult.value);
+    }
+    if (backendResult.present) {
+      map['backend_result'] = Variable<String>(backendResult.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ReviewQueueCompanion(')
+          ..write('id: $id, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('status: $status, ')
+          ..write('mlResult: $mlResult, ')
+          ..write('backendResult: $backendResult, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1575,6 +1980,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BookCollectionsTable bookCollections = $BookCollectionsTable(
     this,
   );
+  late final $ReviewQueueTable reviewQueue = $ReviewQueueTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1584,6 +1990,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     failedScans,
     collections,
     bookCollections,
+    reviewQueue,
   ];
 }
 
@@ -2426,6 +2833,221 @@ typedef $$BookCollectionsTableProcessedTableManager =
       BookCollection,
       PrefetchHooks Function()
     >;
+typedef $$ReviewQueueTableCreateCompanionBuilder =
+    ReviewQueueCompanion Function({
+      Value<int> id,
+      required String imagePath,
+      Value<String> status,
+      Value<String?> mlResult,
+      Value<String?> backendResult,
+      required int createdAt,
+    });
+typedef $$ReviewQueueTableUpdateCompanionBuilder =
+    ReviewQueueCompanion Function({
+      Value<int> id,
+      Value<String> imagePath,
+      Value<String> status,
+      Value<String?> mlResult,
+      Value<String?> backendResult,
+      Value<int> createdAt,
+    });
+
+class $$ReviewQueueTableFilterComposer
+    extends Composer<_$AppDatabase, $ReviewQueueTable> {
+  $$ReviewQueueTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mlResult => $composableBuilder(
+    column: $table.mlResult,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backendResult => $composableBuilder(
+    column: $table.backendResult,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ReviewQueueTableOrderingComposer
+    extends Composer<_$AppDatabase, $ReviewQueueTable> {
+  $$ReviewQueueTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mlResult => $composableBuilder(
+    column: $table.mlResult,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get backendResult => $composableBuilder(
+    column: $table.backendResult,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ReviewQueueTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ReviewQueueTable> {
+  $$ReviewQueueTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get imagePath =>
+      $composableBuilder(column: $table.imagePath, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get mlResult =>
+      $composableBuilder(column: $table.mlResult, builder: (column) => column);
+
+  GeneratedColumn<String> get backendResult => $composableBuilder(
+    column: $table.backendResult,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ReviewQueueTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ReviewQueueTable,
+          ReviewQueueItem,
+          $$ReviewQueueTableFilterComposer,
+          $$ReviewQueueTableOrderingComposer,
+          $$ReviewQueueTableAnnotationComposer,
+          $$ReviewQueueTableCreateCompanionBuilder,
+          $$ReviewQueueTableUpdateCompanionBuilder,
+          (
+            ReviewQueueItem,
+            BaseReferences<_$AppDatabase, $ReviewQueueTable, ReviewQueueItem>,
+          ),
+          ReviewQueueItem,
+          PrefetchHooks Function()
+        > {
+  $$ReviewQueueTableTableManager(_$AppDatabase db, $ReviewQueueTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ReviewQueueTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ReviewQueueTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ReviewQueueTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> imagePath = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> mlResult = const Value.absent(),
+                Value<String?> backendResult = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+              }) => ReviewQueueCompanion(
+                id: id,
+                imagePath: imagePath,
+                status: status,
+                mlResult: mlResult,
+                backendResult: backendResult,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String imagePath,
+                Value<String> status = const Value.absent(),
+                Value<String?> mlResult = const Value.absent(),
+                Value<String?> backendResult = const Value.absent(),
+                required int createdAt,
+              }) => ReviewQueueCompanion.insert(
+                id: id,
+                imagePath: imagePath,
+                status: status,
+                mlResult: mlResult,
+                backendResult: backendResult,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ReviewQueueTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ReviewQueueTable,
+      ReviewQueueItem,
+      $$ReviewQueueTableFilterComposer,
+      $$ReviewQueueTableOrderingComposer,
+      $$ReviewQueueTableAnnotationComposer,
+      $$ReviewQueueTableCreateCompanionBuilder,
+      $$ReviewQueueTableUpdateCompanionBuilder,
+      (
+        ReviewQueueItem,
+        BaseReferences<_$AppDatabase, $ReviewQueueTable, ReviewQueueItem>,
+      ),
+      ReviewQueueItem,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2438,4 +3060,6 @@ class $AppDatabaseManager {
       $$CollectionsTableTableManager(_db, _db.collections);
   $$BookCollectionsTableTableManager get bookCollections =>
       $$BookCollectionsTableTableManager(_db, _db.bookCollections);
+  $$ReviewQueueTableTableManager get reviewQueue =>
+      $$ReviewQueueTableTableManager(_db, _db.reviewQueue);
 }

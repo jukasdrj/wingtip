@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
@@ -24,13 +25,17 @@ import 'package:wingtip/services/widget_data_service.dart';
 class JobStateNotifier extends Notifier<JobState> {
   final Map<String, StreamSubscription<SseEvent>> _sseSubscriptions = {};
   final Map<String, Timer> _autoRemoveTimers = {};
+  final Map<String, int> _jobReviewQueueMap =
+      {}; // Maps serverJobId to reviewQueueId
   Timer? _rateLimitTimer;
 
   @override
   JobState build() {
     // Clean up subscriptions when notifier is disposed
     ref.onDispose(() {
-      debugPrint('[JobStateNotifier] Disposing notifier and cleaning up resources');
+      debugPrint(
+        '[JobStateNotifier] Disposing notifier and cleaning up resources',
+      );
 
       // MEMORY: Cancel all SSE subscriptions
       for (final subscription in _sseSubscriptions.values) {
@@ -70,7 +75,9 @@ class JobStateNotifier extends Notifier<JobState> {
       final failedScan = await database.getFailedScan(failedScanJobId);
 
       if (failedScan == null) {
-        debugPrint('[JobStateNotifier] Failed scan not found: $failedScanJobId');
+        debugPrint(
+          '[JobStateNotifier] Failed scan not found: $failedScanJobId',
+        );
         return false;
       }
 
@@ -103,9 +110,7 @@ class JobStateNotifier extends Notifier<JobState> {
       job = ScanJob.uploading(imagePath);
 
       // Add job to queue
-      state = state.copyWith(
-        jobs: [...state.jobs, job],
-      );
+      state = state.copyWith(jobs: [...state.jobs, job]);
 
       debugPrint('[JobStateNotifier] Created retry job ${job.id}: $imagePath');
 
@@ -115,7 +120,9 @@ class JobStateNotifier extends Notifier<JobState> {
       // Upload to Talaria
       final response = await client.uploadImage(imagePath);
 
-      debugPrint('[JobStateNotifier] Upload successful for retry job ${job.id}:');
+      debugPrint(
+        '[JobStateNotifier] Upload successful for retry job ${job.id}:',
+      );
       debugPrint('  - Job ID: ${response.jobId}');
       debugPrint('  - Stream URL: ${response.streamUrl}');
 
@@ -136,7 +143,9 @@ class JobStateNotifier extends Notifier<JobState> {
 
       return true;
     } on DioException catch (e) {
-      debugPrint('[JobStateNotifier] DioException during retry upload: ${e.type}');
+      debugPrint(
+        '[JobStateNotifier] DioException during retry upload: ${e.type}',
+      );
       await _handleRetryError(e, job, imagePath ?? '', failedScanJobId);
       return false;
     } on SocketException catch (e) {
@@ -161,10 +170,7 @@ class JobStateNotifier extends Notifier<JobState> {
         if (job != null) {
           _updateJob(
             job.id,
-            job.copyWith(
-              status: JobStatus.error,
-              errorMessage: e.toString(),
-            ),
+            job.copyWith(status: JobStatus.error, errorMessage: e.toString()),
           );
         }
 
@@ -199,13 +205,17 @@ class JobStateNotifier extends Notifier<JobState> {
     int failed = 0;
     final total = failedScans.length;
 
-    debugPrint('[JobStateNotifier] Retrying $total failed scans with throttling');
+    debugPrint(
+      '[JobStateNotifier] Retrying $total failed scans with throttling',
+    );
 
     for (int i = 0; i < failedScans.length; i++) {
       final scan = failedScans[i];
       final current = i + 1;
 
-      debugPrint('[JobStateNotifier] Retrying scan $current of $total: ${scan.jobId}');
+      debugPrint(
+        '[JobStateNotifier] Retrying scan $current of $total: ${scan.jobId}',
+      );
 
       // Notify progress
       onProgress(current, total);
@@ -223,12 +233,16 @@ class JobStateNotifier extends Notifier<JobState> {
 
       // Throttle: wait 1 second before next retry (except after last one)
       if (i < failedScans.length - 1) {
-        debugPrint('[JobStateNotifier] Throttling: waiting 1 second before next retry');
+        debugPrint(
+          '[JobStateNotifier] Throttling: waiting 1 second before next retry',
+        );
         await Future.delayed(const Duration(seconds: 1));
       }
     }
 
-    debugPrint('[JobStateNotifier] Batch retry completed: $succeeded succeeded, $failed failed');
+    debugPrint(
+      '[JobStateNotifier] Batch retry completed: $succeeded succeeded, $failed failed',
+    );
 
     return {'succeeded': succeeded, 'failed': failed};
   }
@@ -236,23 +250,22 @@ class JobStateNotifier extends Notifier<JobState> {
   /// Upload an image to Talaria for analysis
   ///
   /// Adds a new job to the queue and starts processing
-  Future<void> uploadImage(String imagePath) async {
+  Future<void> uploadImage(String imagePath, {int? reviewQueueId}) async {
     ScanJob? job;
     try {
       // Create new job in uploading state
       job = ScanJob.uploading(imagePath);
 
       // Add job to queue
-      state = state.copyWith(
-        jobs: [...state.jobs, job],
-      );
+      state = state.copyWith(jobs: [...state.jobs, job]);
 
       debugPrint('[JobStateNotifier] Created job ${job.id}: $imagePath');
 
       // Log analytics event
-      CrashReportingService.logEvent('scan_started', parameters: {
-        'job_id': job.id,
-      });
+      CrashReportingService.logEvent(
+        'scan_started',
+        parameters: {'job_id': job.id},
+      );
 
       // Get TalariaClient from provider
       final client = await ref.read(talariaClientProvider.future);
@@ -287,6 +300,20 @@ class JobStateNotifier extends Notifier<JobState> {
         ),
       );
 
+      // Store review queue mapping if provided
+      if (reviewQueueId != null) {
+        _jobReviewQueueMap[response.jobId] = reviewQueueId;
+      }
+
+      // Update ReviewQueueItem status to 'processing_backend'
+      if (reviewQueueId != null) {
+        final database = ref.read(databaseProvider);
+        await database.updateReviewQueueItem(
+          id: reviewQueueId,
+          status: 'processing_backend',
+        );
+      }
+
       // Start listening to SSE stream
       await _listenToStream(job.id, response.jobId, response.streamUrl);
     } on DioException catch (e) {
@@ -312,10 +339,7 @@ class JobStateNotifier extends Notifier<JobState> {
         if (job != null) {
           _updateJob(
             job.id,
-            job.copyWith(
-              status: JobStatus.error,
-              errorMessage: e.toString(),
-            ),
+            job.copyWith(status: JobStatus.error, errorMessage: e.toString()),
           );
         }
       }
@@ -381,10 +405,7 @@ class JobStateNotifier extends Notifier<JobState> {
     if (job != null) {
       _updateJob(
         job.id,
-        job.copyWith(
-          status: JobStatus.error,
-          errorMessage: errorMessage,
-        ),
+        job.copyWith(status: JobStatus.error, errorMessage: errorMessage),
       );
     }
 
@@ -444,10 +465,7 @@ class JobStateNotifier extends Notifier<JobState> {
     if (job != null) {
       _updateJob(
         job.id,
-        job.copyWith(
-          status: JobStatus.error,
-          errorMessage: errorMessage,
-        ),
+        job.copyWith(status: JobStatus.error, errorMessage: errorMessage),
       );
 
       // Use job's ID as server job ID for failed scans
@@ -510,29 +528,33 @@ class JobStateNotifier extends Notifier<JobState> {
       debugPrint('[JobStateNotifier] Starting SSE stream for job: $jobId');
 
       // Listen to the stream
-      _sseSubscriptions[jobId] = sseClient.listen(streamUrl).listen(
-        (event) {
-          _handleSseEvent(event, jobId, serverJobId);
-        },
-        onError: (error) {
-          debugPrint('[JobStateNotifier] SSE stream error for job $jobId: $error');
-          HapticFeedback.heavyImpact();
-          final job = state.getJobById(jobId);
-          if (job != null) {
-            _updateJob(
-              jobId,
-              job.copyWith(
-                status: JobStatus.error,
-                errorMessage: error.toString(),
-              ),
-            );
-          }
-        },
-        onDone: () {
-          debugPrint('[JobStateNotifier] SSE stream closed for job $jobId');
-        },
-        cancelOnError: true,
-      );
+      _sseSubscriptions[jobId] = sseClient
+          .listen(streamUrl)
+          .listen(
+            (event) {
+              _handleSseEvent(event, jobId, serverJobId);
+            },
+            onError: (error) {
+              debugPrint(
+                '[JobStateNotifier] SSE stream error for job $jobId: $error',
+              );
+              HapticFeedback.heavyImpact();
+              final job = state.getJobById(jobId);
+              if (job != null) {
+                _updateJob(
+                  jobId,
+                  job.copyWith(
+                    status: JobStatus.error,
+                    errorMessage: error.toString(),
+                  ),
+                );
+              }
+            },
+            onDone: () {
+              debugPrint('[JobStateNotifier] SSE stream closed for job $jobId');
+            },
+            cancelOnError: true,
+          );
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to start SSE stream: $e');
       HapticFeedback.heavyImpact();
@@ -540,10 +562,7 @@ class JobStateNotifier extends Notifier<JobState> {
       if (job != null) {
         _updateJob(
           jobId,
-          job.copyWith(
-            status: JobStatus.error,
-            errorMessage: e.toString(),
-          ),
+          job.copyWith(status: JobStatus.error, errorMessage: e.toString()),
         );
       }
     }
@@ -555,7 +574,9 @@ class JobStateNotifier extends Notifier<JobState> {
     String jobId,
     String serverJobId,
   ) async {
-    debugPrint('[JobStateNotifier] Handling SSE event for job $jobId: ${event.type}');
+    debugPrint(
+      '[JobStateNotifier] Handling SSE event for job $jobId: ${event.type}',
+    );
 
     final job = state.getJobById(jobId);
     if (job == null) {
@@ -579,24 +600,29 @@ class JobStateNotifier extends Notifier<JobState> {
       case SseEventType.result:
         // Intermediate result - save to database and update state
         final resultData = event.data;
-        debugPrint('[JobStateNotifier] Received result for job $jobId: $resultData');
+        debugPrint(
+          '[JobStateNotifier] Received result for job $jobId: $resultData',
+        );
 
         // Track SSE first result time if this is the first result for this job
         if (job.result == null && job.sseListeningStartedAt != null) {
-          final sseFirstResultDuration = DateTime.now().difference(job.sseListeningStartedAt!);
+          final sseFirstResultDuration = DateTime.now().difference(
+            job.sseListeningStartedAt!,
+          );
           try {
             final metricsService = ref.read(performanceMetricsServiceProvider);
-            await metricsService.recordSseFirstResultTime(sseFirstResultDuration.inMilliseconds);
+            await metricsService.recordSseFirstResultTime(
+              sseFirstResultDuration.inMilliseconds,
+            );
           } catch (e) {
-            debugPrint('[JobStateNotifier] Failed to record SSE first result time: $e');
+            debugPrint(
+              '[JobStateNotifier] Failed to record SSE first result time: $e',
+            );
           }
         }
 
         await _saveBookResult(resultData, serverJobId);
-        _updateJob(
-          jobId,
-          job.copyWith(result: resultData),
-        );
+        _updateJob(jobId, job.copyWith(result: resultData));
 
       case SseEventType.complete:
         // Job completed successfully
@@ -605,19 +631,18 @@ class JobStateNotifier extends Notifier<JobState> {
 
         // Check if no books were detected
         final results = resultData['results'] as List?;
-        final booksFound = resultData['booksFound'] as int? ?? results?.length ?? 0;
+        final booksFound =
+            resultData['booksFound'] as int? ?? results?.length ?? 0;
 
         if (booksFound == 0) {
           // No books detected - treat as a failed scan
           debugPrint('[JobStateNotifier] No books detected in job $jobId');
           HapticFeedback.heavyImpact();
-          const errorMessage = 'No books detected. Try closer zoom or clearer angle.';
+          const errorMessage =
+              'No books detected. Try closer zoom or clearer angle.';
           _updateJob(
             jobId,
-            job.copyWith(
-              status: JobStatus.error,
-              errorMessage: errorMessage,
-            ),
+            job.copyWith(status: JobStatus.error, errorMessage: errorMessage),
           );
           await _sseSubscriptions[jobId]?.cancel();
           _sseSubscriptions.remove(jobId);
@@ -635,17 +660,14 @@ class JobStateNotifier extends Notifier<JobState> {
         // Books were found - normal completion
         _updateJob(
           jobId,
-          job.copyWith(
-            status: JobStatus.completed,
-            result: resultData,
-          ),
+          job.copyWith(status: JobStatus.completed, result: resultData),
         );
 
         // Log analytics event
-        CrashReportingService.logEvent('scan_completed', parameters: {
-          'job_id': jobId,
-          'books_found': booksFound,
-        });
+        CrashReportingService.logEvent(
+          'scan_completed',
+          parameters: {'job_id': jobId, 'books_found': booksFound},
+        );
 
         await _sseSubscriptions[jobId]?.cancel();
         _sseSubscriptions.remove(jobId);
@@ -658,15 +680,13 @@ class JobStateNotifier extends Notifier<JobState> {
 
       case SseEventType.error:
         // Job failed with error
-        final errorMessage = event.data['message'] as String? ?? 'Unknown error';
+        final errorMessage =
+            event.data['message'] as String? ?? 'Unknown error';
         debugPrint('[JobStateNotifier] Job $jobId error: $errorMessage');
         HapticFeedback.heavyImpact();
         _updateJob(
           jobId,
-          job.copyWith(
-            status: JobStatus.error,
-            errorMessage: errorMessage,
-          ),
+          job.copyWith(status: JobStatus.error, errorMessage: errorMessage),
         );
         _sseSubscriptions[jobId]?.cancel();
         _sseSubscriptions.remove(jobId);
@@ -691,15 +711,21 @@ class JobStateNotifier extends Notifier<JobState> {
   }) async {
     try {
       // Move image from temp to persistent failed_scans directory
-      final persistentPath = await FailedScansDirectory.moveImage(imagePath, jobId);
-      debugPrint('[JobStateNotifier] Moved failed scan image to: $persistentPath');
+      final persistentPath = await FailedScansDirectory.moveImage(
+        imagePath,
+        jobId,
+      );
+      debugPrint(
+        '[JobStateNotifier] Moved failed scan image to: $persistentPath',
+      );
 
       // Get retention duration from settings
       final retentionService = ref.read(failedScanRetentionServiceProvider);
       final retentionDuration = retentionService.getRetentionDuration();
 
       // Use provided reason or categorize based on error message
-      final reason = failureReason ?? FailureCategorizer.categorize(null, errorMessage);
+      final reason =
+          failureReason ?? FailureCategorizer.categorize(null, errorMessage);
 
       final database = ref.read(databaseProvider);
       await database.saveFailedScan(
@@ -709,7 +735,9 @@ class JobStateNotifier extends Notifier<JobState> {
         failureReason: reason,
         retentionPeriod: retentionDuration,
       );
-      debugPrint('[JobStateNotifier] Failed scan saved: $jobId (reason: ${reason.label})');
+      debugPrint(
+        '[JobStateNotifier] Failed scan saved: $jobId (reason: ${reason.label})',
+      );
     } catch (e) {
       debugPrint('[JobStateNotifier] Failed to save failed scan: $e');
     }
@@ -717,8 +745,31 @@ class JobStateNotifier extends Notifier<JobState> {
 
   /// Save book result to database
   /// If this is a retry of a failed scan, delete the failed scan entry and image
-  Future<void> _saveBookResult(Map<String, dynamic> resultData, String serverJobId) async {
+  Future<void> _saveBookResult(
+    Map<String, dynamic> resultData,
+    String serverJobId,
+  ) async {
     try {
+      final database = ref.read(databaseProvider);
+
+      // Check if this job is associated with a review queue item
+      if (_jobReviewQueueMap.containsKey(serverJobId)) {
+        final reviewQueueId = _jobReviewQueueMap[serverJobId];
+        await database.updateReviewQueueItem(
+          id: reviewQueueId!,
+          status: 'ready',
+          backendResult: jsonEncode(resultData),
+        );
+        debugPrint(
+          '[JobStateNotifier] Updated review queue item $reviewQueueId with backend result',
+        );
+
+        // Cleanup mapping
+        _jobReviewQueueMap.remove(serverJobId);
+        return;
+      }
+
+      // Legacy behavior: Direct insert to Books
       // Extract book data from result
       final isbn = resultData['isbn'] as String?;
       final title = resultData['title'] as String?;
@@ -766,17 +817,19 @@ class JobStateNotifier extends Notifier<JobState> {
       );
 
       // Get database and insert (INSERT OR REPLACE)
-      final database = ref.read(databaseProvider);
       await database.into(database.books).insertOnConflictUpdate(book);
 
       debugPrint('[JobStateNotifier] Book saved: $isbn - $title');
 
       // Log analytics event
-      CrashReportingService.logEvent('book_saved', parameters: {
-        'isbn': isbn,
-        'has_cover': coverUrl != null && coverUrl.isNotEmpty,
-        'spine_confidence': spineConfidence?.toDouble() ?? 0.0,
-      });
+      CrashReportingService.logEvent(
+        'book_saved',
+        parameters: {
+          'isbn': isbn,
+          'has_cover': coverUrl != null && coverUrl.isNotEmpty,
+          'spine_confidence': spineConfidence?.toDouble() ?? 0.0,
+        },
+      );
 
       // Check if this was a retry of a failed scan and clean it up
       await _cleanupFailedScanIfExists(serverJobId);
@@ -803,7 +856,9 @@ class JobStateNotifier extends Notifier<JobState> {
       final failedScan = await database.getFailedScan(jobId);
 
       if (failedScan != null) {
-        debugPrint('[JobStateNotifier] Cleaning up failed scan for job: $jobId');
+        debugPrint(
+          '[JobStateNotifier] Cleaning up failed scan for job: $jobId',
+        );
 
         // Delete the image file
         await FailedScansDirectory.deleteImage(jobId);

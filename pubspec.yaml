@@ -96,6 +96,8 @@ dependencies:
 
   # URL launcher (for email feedback)
   url_launcher: ^6.3.1
+  google_mlkit_text_recognition: ^0.15.0
+  google_mlkit_object_detection: ^0.15.0
 
 dev_dependencies:
   flutter_test:

@@ -7,8 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wingtip/core/performance_metrics_provider.dart';
 import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/features/camera/camera_provider.dart';
-import 'package:wingtip/features/camera/image_processor.dart';
 import 'package:wingtip/features/camera/session_counter_provider.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:wingtip/data/database_provider.dart';
+import 'package:wingtip/features/scancapture/local_processor_provider.dart';
 import 'package:wingtip/features/camera/session_counter_widget.dart';
 import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/features/talaria/processing_stack_widget.dart';
@@ -44,6 +47,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   double _baseExposureCompensation = 0.0;
   bool _isAdjustingExposure = false;
   double _swipeStartY = 0.0;
+  bool _isCapturing = false; // Added missing variable
 
   @override
   void initState() {
@@ -79,10 +83,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           _shownErrorJobIds.add(job.id);
 
           // Show error notification with user-friendly message
-          ErrorSnackBar.show(
-            context,
-            message: job.errorMessage!,
-          );
+          ErrorSnackBar.show(context, message: job.errorMessage!);
         }
       }
     });
@@ -219,7 +220,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     }
   }
 
-  void _handleLongPress(LongPressStartDetails details, BoxConstraints constraints) async {
+  void _handleLongPress(
+    LongPressStartDetails details,
+    BoxConstraints constraints,
+  ) async {
     final cameraService = ref.read(cameraServiceProvider);
     if (cameraService.controller == null) return;
 
@@ -251,7 +255,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       // Trigger medium haptic feedback for lock
       HapticFeedback.mediumImpact();
 
-      debugPrint('[CameraScreen] Focus and exposure locked at ${details.localPosition}');
+      debugPrint(
+        '[CameraScreen] Focus and exposure locked at ${details.localPosition}',
+      );
     } catch (e) {
       debugPrint('[CameraScreen] Error locking focus: $e');
     }
@@ -280,7 +286,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final exposureChange = -deltaY / 200.0; // Scale factor for sensitivity
 
     // Calculate new exposure compensation (-2.0 to +2.0)
-    final newExposure = (_baseExposureCompensation + exposureChange).clamp(-2.0, 2.0);
+    final newExposure = (_baseExposureCompensation + exposureChange).clamp(
+      -2.0,
+      2.0,
+    );
 
     if ((newExposure - _exposureCompensation).abs() > 0.05) {
       setState(() {
@@ -288,7 +297,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       });
 
       try {
-        await cameraService.controller!.setExposureOffset(_exposureCompensation);
+        await cameraService.controller!.setExposureOffset(
+          _exposureCompensation,
+        );
         // Light haptic feedback during adjustment
         HapticFeedback.selectionClick();
       } catch (e) {
@@ -348,28 +359,65 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
       // OPTIMIZED: takePicture() is the critical path - minimize work before this
       final XFile image = await cameraService.controller!.takePicture();
+      final String imagePath = image.path;
 
       // Calculate tap-to-capture latency
       final captureLatency = DateTime.now().difference(tapTime);
 
-      debugPrint('[CameraScreen] Image captured in ${captureLatency.inMilliseconds}ms: ${image.path}');
+      debugPrint(
+        '[CameraScreen] Image captured in ${captureLatency.inMilliseconds}ms: $imagePath',
+      );
 
       // Record shutter latency metric (non-blocking)
       _recordShutterLatencyAsync(captureLatency.inMilliseconds);
 
-      // Process image in background isolate (this is already optimized)
-      final result = await ImageProcessor.processImage(image.path, ref: ref);
+      // 1. Add to Review Queue
+      final database = ref.read(databaseProvider);
+      final reviewQueueId = await database.addToReviewQueue(
+        imagePath: imagePath,
+      );
+      debugPrint('[CameraScreen] Added to Review Queue: $reviewQueueId');
 
-      debugPrint('[CameraScreen] Image processed successfully:');
-      debugPrint('  - Output: ${result.outputPath}');
-      debugPrint('  - Processing time: ${result.processingTimeMs}ms');
-      debugPrint('  - Size reduction: ${result.originalSize} -> ${result.processedSize} bytes');
+      // 2. Trigger Local Processing (Background)
+      ref
+          .read(localProcessorServiceProvider)
+          .processImage(File(imagePath))
+          .then((result) async {
+            await database.updateReviewQueueItem(
+              id: reviewQueueId,
+              mlResult: jsonEncode(result),
+              status: 'ready', // Mark ready as soon as local ML is done
+            );
+            debugPrint(
+              '[CameraScreen] Local processing completed for $reviewQueueId',
+            );
+          })
+          .catchError((e) {
+            debugPrint('[CameraScreen] Local processing failed: $e');
+          });
 
-      // Upload to Talaria for analysis
-      final jobStateNotifier = ref.read(jobStateProvider.notifier);
-      await jobStateNotifier.uploadImage(result.outputPath);
+      // 3. Trigger Backend Upload (Background)
+      // Pass reviewQueueId so results are routed to the queue item
+      final jobNotifier = ref.read(jobStateProvider.notifier);
+      jobNotifier.uploadImage(imagePath, reviewQueueId: reviewQueueId);
+
+      // 4. UI Feedback
+      if (mounted) {
+        HapticFeedback.mediumImpact();
+      }
     } catch (e) {
       debugPrint('[CameraScreen] Error capturing/processing image: $e');
+      if (mounted) {
+        ErrorSnackBar.show(context, message: 'Failed to capture image: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCapturing = false;
+        });
+      }
+      // Reset modes
+      _resetCameraModesAsync(cameraService);
     }
   }
 
@@ -405,7 +453,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final jobState = ref.watch(jobStateProvider);
 
     // Get the active job's progress message
-    final activeJob = jobState.activeJobs.isNotEmpty ? jobState.activeJobs.first : null;
+    final activeJob = jobState.activeJobs.isNotEmpty
+        ? jobState.activeJobs.first
+        : null;
     final streamMessage = activeJob?.progressMessage;
 
     return Scaffold(
@@ -414,7 +464,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         children: [
           _buildBody(cameraService),
           if (_showFlash) _buildFlashOverlay(),
-          if (cameraService.isInitialized && cameraService.controller != null) ...[
+          if (cameraService.isInitialized &&
+              cameraService.controller != null) ...[
             const ProcessingStackWidget(),
             _buildShutterButton(),
             _buildZoomIndicator(),
@@ -423,7 +474,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               _buildFocusIndicator(),
             if (_focusLocked && _lockedFocusPoint != null)
               _buildLockedFocusIndicator(),
-            if (_focusLocked && (_isAdjustingExposure || _exposureCompensation != 0.0))
+            if (_focusLocked &&
+                (_isAdjustingExposure || _exposureCompensation != 0.0))
               _buildExposureOverlay(),
           ],
           StreamOverlay(
@@ -511,7 +563,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: isRateLimited ? Colors.white.withValues(alpha: 0.3) : Colors.white,
+                color: isRateLimited
+                    ? Colors.white.withValues(alpha: 0.3)
+                    : Colors.white,
                 width: 4,
               ),
             ),
@@ -522,11 +576,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   Widget _buildSessionCounter() {
-    return const Positioned(
-      top: 48,
-      right: 16,
-      child: SessionCounterWidget(),
-    );
+    return const Positioned(top: 48, right: 16, child: SessionCounterWidget());
   }
 
   Widget _buildLibraryButton(BuildContext context) {
@@ -536,9 +586,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       child: GestureDetector(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const LibraryScreen(),
-            ),
+            MaterialPageRoute(builder: (context) => const LibraryScreen()),
           );
         },
         child: Container(
@@ -547,10 +595,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           decoration: BoxDecoration(
             color: AppTheme.borderGray,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: Colors.white,
-              width: 1,
-            ),
+            border: Border.all(color: Colors.white, width: 1),
           ),
           child: const Icon(
             Icons.grid_view_rounded,
@@ -608,10 +653,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           // Save Night Mode preference
           try {
             final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool('camera_night_mode_enabled', cameraService.nightModeEnabled);
-            debugPrint('[CameraScreen] Night Mode preference saved: ${cameraService.nightModeEnabled}');
+            await prefs.setBool(
+              'camera_night_mode_enabled',
+              cameraService.nightModeEnabled,
+            );
+            debugPrint(
+              '[CameraScreen] Night Mode preference saved: ${cameraService.nightModeEnabled}',
+            );
           } catch (e) {
-            debugPrint('[CameraScreen] Failed to save Night Mode preference: $e');
+            debugPrint(
+              '[CameraScreen] Failed to save Night Mode preference: $e',
+            );
           }
 
           setState(() {}); // Trigger rebuild to update icon
@@ -621,7 +673,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           height: 48,
           decoration: BoxDecoration(
             color: isEnabled
-                ? const Color(0xFFFFD700).withValues(alpha: 0.2) // Gold/yellow tint when enabled
+                ? const Color(0xFFFFD700).withValues(
+                    alpha: 0.2,
+                  ) // Gold/yellow tint when enabled
                 : Colors.black.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
@@ -656,10 +710,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              border: Border.all(
-                color: Colors.white,
-                width: 2,
-              ),
+              border: Border.all(color: Colors.white, width: 2),
             ),
             child: Stack(
               children: [
@@ -730,10 +781,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            border: Border.all(
-              color: yellowColor,
-              width: 2,
-            ),
+            border: Border.all(color: yellowColor, width: 2),
           ),
           child: Stack(
             children: [
@@ -843,7 +891,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final minutes = (remainingMs % (1000 * 60 * 60)) ~/ (1000 * 60);
     final seconds = (remainingMs % (1000 * 60)) ~/ 1000;
 
-    final timeString = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    final timeString =
+        '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 
     return Positioned.fill(
       child: Container(
@@ -899,21 +948,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 }
 
-enum BracketPosition {
-  topLeft,
-  topRight,
-  bottomLeft,
-  bottomRight,
-}
+enum BracketPosition { topLeft, topRight, bottomLeft, bottomRight }
 
 class _BracketPainter extends CustomPainter {
   final Color color;
   final BracketPosition position;
 
-  _BracketPainter({
-    required this.color,
-    required this.position,
-  });
+  _BracketPainter({required this.color, required this.position});
 
   @override
   void paint(Canvas canvas, Size size) {

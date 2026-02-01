@@ -11,9 +11,9 @@ import 'package:wingtip/core/app_lifecycle_observer.dart';
 import 'package:wingtip/core/performance_metrics_service.dart';
 import 'package:wingtip/core/performance_overlay_provider.dart';
 import 'package:wingtip/core/restart_widget.dart';
-import 'package:wingtip/features/camera/camera_screen.dart';
 import 'package:wingtip/features/camera/camera_service.dart';
 import 'package:wingtip/features/camera/permission_primer_screen.dart';
+import 'package:wingtip/features/home/home_screen.dart';
 import 'package:wingtip/features/onboarding/onboarding_screen.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:wingtip/services/failed_scans_cleanup_service_provider.dart';
@@ -75,12 +75,15 @@ Future<void> _runApp() async {
 
       // Load SharedPreferences once for camera settings
       final prefs = await SharedPreferences.getInstance();
-      final nightModeEnabled = prefs.getBool('camera_night_mode_enabled') ?? false;
+      final nightModeEnabled =
+          prefs.getBool('camera_night_mode_enabled') ?? false;
 
       await cameraService.initialize(restoreNightMode: nightModeEnabled);
 
       if (cameraService.initializationDuration != null) {
-        debugPrint('[Performance] Camera initialization took ${cameraService.initializationDuration!.inMilliseconds}ms');
+        debugPrint(
+          '[Performance] Camera initialization took ${cameraService.initializationDuration!.inMilliseconds}ms',
+        );
       }
     });
     futures.add(cameraInitFuture);
@@ -91,7 +94,9 @@ Future<void> _runApp() async {
 
   // Performance logging: Cold start time
   final coldStartTime = DateTime.now().difference(appStartTime);
-  debugPrint('[Performance] Cold start completed in ${coldStartTime.inMilliseconds}ms');
+  debugPrint(
+    '[Performance] Cold start completed in ${coldStartTime.inMilliseconds}ms',
+  );
 
   // Deferred: Record metrics asynchronously after app is interactive
   if (cameraPermissionStatus.isGranted) {
@@ -197,9 +202,7 @@ class _MyAppState extends State<MyApp> {
             // Enable performance overlay for ProMotion profiling
             showPerformanceOverlay: showPerformanceOverlay,
             // Route logic: Onboarding → Permission → Camera
-            home: ShakeToFeedbackWrapper(
-              child: _determineHomeScreen(),
-            ),
+            home: ShakeToFeedbackWrapper(child: _determineHomeScreen()),
           ),
         );
       },
@@ -223,9 +226,9 @@ class _MyAppState extends State<MyApp> {
       return const PermissionPrimerScreen();
     }
 
-    // If onboarding completed and permission granted, show camera screen
-    debugPrint('[Startup] Showing CameraScreen');
-    return const CameraScreen();
+    // If onboarding completed and permission granted, show home screen
+    debugPrint('[Startup] Showing HomeScreen');
+    return const HomeScreen();
   }
 
   @override
