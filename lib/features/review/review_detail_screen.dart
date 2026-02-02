@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:wingtip/data/database.dart';
 import 'package:wingtip/data/database_provider.dart';
 
@@ -21,6 +23,9 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
 
   // To store parsed ML results
   Map<String, dynamic>? _mlData;
+
+  // Source image dimensions for bounding box scaling
+  Size? _imageSize;
 
   @override
   void initState() {
@@ -49,6 +54,53 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
         _isbnController.text = backendData['isbn'] ?? '';
       } catch (e) {
         debugPrint('Error parsing backend result: $e');
+      }
+    }
+
+    // Auto-populate fields from ML text blocks if backend hasn't responded
+    if (_mlData != null && widget.item.backendResult == null) {
+      _populateFromMLTextBlocks();
+    }
+
+    // Load image size for bounding box scaling
+    _loadImageSize();
+  }
+
+  Future<void> _loadImageSize() async {
+    try {
+      final file = File(widget.item.imagePath);
+      final bytes = await file.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final decoded = frame.image;
+      if (mounted) {
+        setState(() {
+          _imageSize = Size(decoded.width.toDouble(), decoded.height.toDouble());
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading image size: $e');
+      if (mounted) {
+        setState(() {
+          _imageSize = const Size(1920, 1080); // Fallback
+        });
+      }
+    }
+  }
+
+  void _populateFromMLTextBlocks() {
+    final textBlocks = _mlData!['textBlocks'] as List<dynamic>? ?? [];
+    if (textBlocks.isNotEmpty) {
+      // Sort by text length descending - longest likely title, second likely author
+      final sortedBlocks = List<Map<String, dynamic>>.from(textBlocks)
+        ..sort((a, b) =>
+          (b['text'] as String).length.compareTo((a['text'] as String).length));
+
+      if (sortedBlocks.isNotEmpty) {
+        _titleController.text = sortedBlocks[0]['text'] as String? ?? '';
+      }
+      if (sortedBlocks.length > 1) {
+        _authorController.text = sortedBlocks[1]['text'] as String? ?? '';
       }
     }
   }
@@ -82,8 +134,10 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
         title: title,
         author: author,
         addedDate: DateTime.now().millisecondsSinceEpoch,
-        // Optionally copy the image to a permanent location if needed
-        // For now, assuming we keep using the local path or move it
+        spineImagePath: Value(
+          widget.item.imagePath,
+        ), // Save the captured image as spine image
+        // We could also try to set coverUrl if backend result had it
       );
 
       await database.into(database.books).insertOnConflictUpdate(book);
@@ -143,8 +197,13 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
                 fit: StackFit.expand,
                 children: [
                   Image.file(File(widget.item.imagePath), fit: BoxFit.contain),
-                  if (_mlData != null)
-                    CustomPaint(painter: BoundingBoxPainter(mlData: _mlData!)),
+                  if (_mlData != null && _imageSize != null)
+                    CustomPaint(
+                      painter: BoundingBoxPainter(
+                        mlData: _mlData!,
+                        imageSize: _imageSize!,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -181,16 +240,115 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
 
 class BoundingBoxPainter extends CustomPainter {
   final Map<String, dynamic> mlData;
+  final Size imageSize; // Source image pixel dimensions
 
-  BoundingBoxPainter({required this.mlData});
+  BoundingBoxPainter({required this.mlData, required this.imageSize});
 
   @override
-  void paint(Canvas canvas, Size size) {
-    // TODO: Need logic to scale normalized rects to display size
-    // Assuming for now we just draw raw if coordinates match
-    // Real implementation requires scaling based on image aspect ratio vs display aspect ratio
+  void paint(Canvas canvas, Size canvasSize) {
+    // Calculate BoxFit.contain scaling
+    final imageAspect = imageSize.width / imageSize.height;
+    final canvasAspect = canvasSize.width / canvasSize.height;
+
+    double scale;
+    double offsetX = 0;
+    double offsetY = 0;
+
+    if (imageAspect > canvasAspect) {
+      // Image is wider - fit to width
+      scale = canvasSize.width / imageSize.width;
+      offsetY = (canvasSize.height - imageSize.height * scale) / 2;
+    } else {
+      // Image is taller - fit to height
+      scale = canvasSize.height / imageSize.height;
+      offsetX = (canvasSize.width - imageSize.width * scale) / 2;
+    }
+
+    // Paint for object bounding boxes - Swiss Utility International Orange
+    final objectPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = const Color(0xFFFF3B30); // International Orange
+
+    // Paint for text blocks - lighter opacity
+    final textPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = const Color(0x80FF3B30); // 50% opacity
+
+    final textStyle = TextStyle(
+      color: const Color(0xFFFF3B30),
+      fontSize: 10,
+      fontFamily: 'JetBrainsMono',
+      backgroundColor: const Color(0xB3000000), // 70% opacity black
+    );
+
+    // Draw bounding boxes for detected objects
+    final objects = mlData['objects'] as List<dynamic>? ?? [];
+    for (final obj in objects) {
+      final bbox = obj['boundingBox'] as Map<String, dynamic>?;
+      if (bbox == null) continue;
+
+      // Scale absolute pixel coordinates to display coordinates
+      final left = (bbox['left'] as num).toDouble();
+      final top = (bbox['top'] as num).toDouble();
+      final width = (bbox['width'] as num).toDouble();
+      final height = (bbox['height'] as num).toDouble();
+
+      final scaledRect = Rect.fromLTWH(
+        left * scale + offsetX,
+        top * scale + offsetY,
+        width * scale,
+        height * scale,
+      );
+
+      canvas.drawRect(scaledRect, objectPaint);
+
+      // Draw label with confidence
+      final labels = obj['labels'] as List<dynamic>? ?? [];
+      if (labels.isNotEmpty) {
+        final label = labels.first;
+        final text = label['text'] as String? ?? '';
+        final confidence = (label['confidence'] as num?)?.toDouble() ?? 0;
+        final labelText = '$text ${(confidence * 100).toInt()}%';
+
+        final textSpan = TextSpan(text: labelText, style: textStyle);
+        final textPainter = TextPainter(
+          text: textSpan,
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        textPainter.paint(
+          canvas,
+          Offset(scaledRect.left, scaledRect.top - textPainter.height - 2),
+        );
+      }
+    }
+
+    // Draw bounding boxes for text blocks
+    final textBlocks = mlData['textBlocks'] as List<dynamic>? ?? [];
+    for (final block in textBlocks) {
+      final bbox = block['boundingBox'] as Map<String, dynamic>?;
+      if (bbox == null) continue;
+
+      final left = (bbox['left'] as num).toDouble();
+      final top = (bbox['top'] as num).toDouble();
+      final width = (bbox['width'] as num).toDouble();
+      final height = (bbox['height'] as num).toDouble();
+
+      final scaledRect = Rect.fromLTWH(
+        left * scale + offsetX,
+        top * scale + offsetY,
+        width * scale,
+        height * scale,
+      );
+
+      canvas.drawRect(scaledRect, textPaint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant BoundingBoxPainter oldDelegate) {
+    return oldDelegate.mlData != mlData || oldDelegate.imageSize != imageSize;
+  }
 }
