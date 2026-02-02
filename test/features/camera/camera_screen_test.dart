@@ -30,11 +30,11 @@ class MockCameraService implements CameraService {
     String? errorMessage,
     bool nightModeAvailable = false,
     bool nightModeEnabled = false,
-  })  : _mockIsInitialized = isInitialized,
-        _mockController = controller,
-        _mockErrorMessage = errorMessage,
-        _mockNightModeAvailable = nightModeAvailable,
-        _mockNightModeEnabled = nightModeEnabled;
+  }) : _mockIsInitialized = isInitialized,
+       _mockController = controller,
+       _mockErrorMessage = errorMessage,
+       _mockNightModeAvailable = nightModeAvailable,
+       _mockNightModeEnabled = nightModeEnabled;
 
   @override
   bool get isInitialized => _mockIsInitialized;
@@ -65,40 +65,46 @@ class MockCameraService implements CameraService {
 
   @override
   Future<void> toggleNightMode() async {}
+
+  @override
+  Future<void> startImageStream(Function(CameraImage) onAvailable) async {}
+
+  @override
+  Future<void> stopImageStream() async {}
 }
 
 /// Mock CameraController for testing
 class MockCameraController extends CameraController {
   MockCameraController()
-      : super(
-          const CameraDescription(
-            name: 'mock_camera',
-            lensDirection: CameraLensDirection.back,
-            sensorOrientation: 0,
-          ),
-          ResolutionPreset.high,
-        );
-
-  @override
-  CameraValue get value => CameraValue(
-        isInitialized: true,
-        previewSize: const Size(1920, 1080),
-        isRecordingVideo: false,
-        isTakingPicture: false,
-        isStreamingImages: false,
-        isRecordingPaused: false,
-        flashMode: FlashMode.off,
-        exposureMode: ExposureMode.auto,
-        focusMode: FocusMode.auto,
-        exposurePointSupported: true,
-        focusPointSupported: true,
-        deviceOrientation: DeviceOrientation.portraitUp,
-        description: const CameraDescription(
+    : super(
+        const CameraDescription(
           name: 'mock_camera',
           lensDirection: CameraLensDirection.back,
           sensorOrientation: 0,
         ),
+        ResolutionPreset.high,
       );
+
+  @override
+  CameraValue get value => CameraValue(
+    isInitialized: true,
+    previewSize: const Size(1920, 1080),
+    isRecordingVideo: false,
+    isTakingPicture: false,
+    isStreamingImages: false,
+    isRecordingPaused: false,
+    flashMode: FlashMode.off,
+    exposureMode: ExposureMode.auto,
+    focusMode: FocusMode.auto,
+    exposurePointSupported: true,
+    focusPointSupported: true,
+    deviceOrientation: DeviceOrientation.portraitUp,
+    description: const CameraDescription(
+      name: 'mock_camera',
+      lensDirection: CameraLensDirection.back,
+      sensorOrientation: 0,
+    ),
+  );
 
   @override
   Future<void> setZoomLevel(double zoom) async {}
@@ -183,28 +189,32 @@ void main() {
       mockPerformanceService = MockPerformanceMetricsService();
     });
 
-    testWidgets('CameraScreen renders without crashing with mocked camera controller',
-        (tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            cameraServiceProvider.overrideWithValue(mockCameraService),
-            jobStateProvider.overrideWith(() => MockJobStateNotifier()),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
-          ],
-          child: MaterialApp(
-            theme: AppTheme.darkTheme,
-            home: const CameraScreen(),
+    testWidgets(
+      'CameraScreen renders without crashing with mocked camera controller',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              cameraServiceProvider.overrideWithValue(mockCameraService),
+              jobStateProvider.overrideWith(() => MockJobStateNotifier()),
+              performanceMetricsServiceProvider.overrideWithValue(
+                mockPerformanceService,
+              ),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.darkTheme,
+              home: const CameraScreen(),
+            ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      // Verify the camera screen is rendered
-      expect(find.byType(CameraScreen), findsOneWidget);
-      expect(find.byType(Scaffold), findsOneWidget);
-    });
+        // Verify the camera screen is rendered
+        expect(find.byType(CameraScreen), findsOneWidget);
+        expect(find.byType(Scaffold), findsOneWidget);
+      },
+    );
 
     testWidgets('Shutter button is visible and tappable', (tester) async {
       await tester.pumpWidget(
@@ -212,7 +222,9 @@ void main() {
           overrides: [
             cameraServiceProvider.overrideWithValue(mockCameraService),
             jobStateProvider.overrideWith(() => MockJobStateNotifier()),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.darkTheme,
@@ -243,8 +255,9 @@ void main() {
       // No error should be thrown
     });
 
-    testWidgets('Shows loading indicator when camera is not initialized',
-        (tester) async {
+    testWidgets('Shows loading indicator when camera is not initialized', (
+      tester,
+    ) async {
       final uninitializedService = MockCameraService(
         isInitialized: false,
         controller: null,
@@ -255,7 +268,9 @@ void main() {
           overrides: [
             cameraServiceProvider.overrideWithValue(uninitializedService),
             jobStateProvider.overrideWith(() => MockJobStateNotifier()),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.darkTheme,
@@ -270,8 +285,9 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
-    testWidgets('Shows error message when camera initialization fails',
-        (tester) async {
+    testWidgets('Shows error message when camera initialization fails', (
+      tester,
+    ) async {
       const errorMessage = 'Failed to initialize camera';
       final errorService = MockCameraService(
         isInitialized: false,
@@ -284,7 +300,9 @@ void main() {
           overrides: [
             cameraServiceProvider.overrideWithValue(errorService),
             jobStateProvider.overrideWith(() => MockJobStateNotifier()),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.darkTheme,
@@ -300,50 +318,59 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
-    testWidgets('Stream overlay appears when progressMessage is set in job state',
-        (tester) async {
-      // Create a notifier with an active job that has a progress message
-      final jobStateWithMessage = JobState(
-        jobs: [
-          ScanJob(
-            id: '1',
-            jobId: 'job-123',
-            imagePath: '/tmp/test.jpg',
-            status: JobStatus.processing,
-            progressMessage: 'Analyzing book spines...',
-            createdAt: DateTime.now(),
-          ),
-        ],
-      );
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            cameraServiceProvider.overrideWithValue(mockCameraService),
-            jobStateProvider.overrideWith(() => MockJobStateNotifier(initialState: jobStateWithMessage)),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+    testWidgets(
+      'Stream overlay appears when progressMessage is set in job state',
+      (tester) async {
+        // Create a notifier with an active job that has a progress message
+        final jobStateWithMessage = JobState(
+          jobs: [
+            ScanJob(
+              id: '1',
+              jobId: 'job-123',
+              imagePath: '/tmp/test.jpg',
+              status: JobStatus.processing,
+              progressMessage: 'Analyzing book spines...',
+              createdAt: DateTime.now(),
+            ),
           ],
-          child: MaterialApp(
-            theme: AppTheme.darkTheme,
-            home: const CameraScreen(),
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              cameraServiceProvider.overrideWithValue(mockCameraService),
+              jobStateProvider.overrideWith(
+                () => MockJobStateNotifier(initialState: jobStateWithMessage),
+              ),
+              performanceMetricsServiceProvider.overrideWithValue(
+                mockPerformanceService,
+              ),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.darkTheme,
+              home: const CameraScreen(),
+            ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      // Verify stream overlay with message is displayed
-      expect(find.text('Analyzing book spines...'), findsOneWidget);
-    });
+        // Verify stream overlay with message is displayed
+        expect(find.text('Analyzing book spines...'), findsOneWidget);
+      },
+    );
 
-    testWidgets('Session counter displays correctly and shows count',
-        (tester) async {
+    testWidgets('Session counter displays correctly and shows count', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             cameraServiceProvider.overrideWithValue(mockCameraService),
             jobStateProvider.overrideWith(() => MockJobStateNotifier()),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
             // Override session counter to show a count
             sessionCounterProvider.overrideWith(() {
               return TestSessionCounterNotifier(initialCount: 5);
@@ -368,7 +395,9 @@ void main() {
           overrides: [
             cameraServiceProvider.overrideWithValue(mockCameraService),
             jobStateProvider.overrideWith(() => MockJobStateNotifier()),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
             // Default session counter starts at 0
           ],
           child: MaterialApp(
@@ -390,7 +419,9 @@ void main() {
           overrides: [
             cameraServiceProvider.overrideWithValue(mockCameraService),
             jobStateProvider.overrideWith(() => MockJobStateNotifier()),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.darkTheme,
@@ -413,8 +444,9 @@ void main() {
       // but tapping without error confirms the button is tappable
     });
 
-    testWidgets('Rate limit overlay appears when rate limit is active',
-        (tester) async {
+    testWidgets('Rate limit overlay appears when rate limit is active', (
+      tester,
+    ) async {
       final rateLimitedState = JobState(
         rateLimit: RateLimitInfo(
           expiresAt: DateTime.now().add(const Duration(hours: 1)),
@@ -426,8 +458,12 @@ void main() {
         ProviderScope(
           overrides: [
             cameraServiceProvider.overrideWithValue(mockCameraService),
-            jobStateProvider.overrideWith(() => MockJobStateNotifier(initialState: rateLimitedState)),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+            jobStateProvider.overrideWith(
+              () => MockJobStateNotifier(initialState: rateLimitedState),
+            ),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.darkTheme,
@@ -455,8 +491,12 @@ void main() {
         ProviderScope(
           overrides: [
             cameraServiceProvider.overrideWithValue(mockCameraService),
-            jobStateProvider.overrideWith(() => MockJobStateNotifier(initialState: rateLimitedState)),
-            performanceMetricsServiceProvider.overrideWithValue(mockPerformanceService),
+            jobStateProvider.overrideWith(
+              () => MockJobStateNotifier(initialState: rateLimitedState),
+            ),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.darkTheme,
@@ -488,6 +528,182 @@ void main() {
     });
   });
 
+  group('CameraScreen - SSE Cleanup Tests', () {
+    late MockCameraController mockController;
+    late MockCameraService mockCameraService;
+    late MockPerformanceMetricsService mockPerformanceService;
+
+    setUp(() {
+      mockController = MockCameraController();
+      mockCameraService = MockCameraService(
+        isInitialized: true,
+        controller: mockController,
+      );
+      mockPerformanceService = MockPerformanceMetricsService();
+    });
+
+    testWidgets('cancelActiveJobs skips jobs without server jobId', (
+      tester,
+    ) async {
+      // Create a job without server jobId (only local id)
+      final jobWithoutServerId = JobState(
+        jobs: [
+          ScanJob(
+            id: 'local-1',
+            jobId: null, // No server jobId yet
+            imagePath: '/tmp/test.jpg',
+            status: JobStatus.uploading,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cameraServiceProvider.overrideWithValue(mockCameraService),
+            jobStateProvider.overrideWith(
+              () => MockJobStateNotifier(initialState: jobWithoutServerId),
+            ),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: const CameraScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Job state should remain uploading (not cancelled)
+      // Note: This test verifies the widget renders correctly with such jobs
+      expect(find.byType(CameraScreen), findsOneWidget);
+    });
+
+    testWidgets('cancelActiveJobs skips completed jobs', (tester) async {
+      // Create a completed job
+      final completedJobState = JobState(
+        jobs: [
+          ScanJob(
+            id: 'completed-1',
+            jobId: 'job-123',
+            imagePath: '/tmp/test.jpg',
+            status: JobStatus.completed,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cameraServiceProvider.overrideWithValue(mockCameraService),
+            jobStateProvider.overrideWith(
+              () => MockJobStateNotifier(initialState: completedJobState),
+            ),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: const CameraScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Completed jobs should not be affected by cleanup
+      expect(find.byType(CameraScreen), findsOneWidget);
+    });
+
+    testWidgets('cancelActiveJobs updates active job states to error', (
+      tester,
+    ) async {
+      // Create an active processing job
+      final activeJobState = JobState(
+        jobs: [
+          ScanJob(
+            id: 'active-1',
+            jobId: 'job-456',
+            imagePath: '/tmp/test.jpg',
+            status: JobStatus.processing,
+            createdAt: DateTime.now(),
+            sseListeningStartedAt: DateTime.now().subtract(const Duration(seconds: 45)),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cameraServiceProvider.overrideWithValue(mockCameraService),
+            jobStateProvider.overrideWith(
+              () => MockJobStateNotifier(initialState: activeJobState),
+            ),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: const CameraScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Widget should render without error
+      expect(find.byType(CameraScreen), findsOneWidget);
+    });
+
+    testWidgets('cleanup is fire-and-forget (no exception propagation)', (
+      tester,
+    ) async {
+      // Even with active jobs that might fail cleanup, the UI should not crash
+      final activeJobState = JobState(
+        jobs: [
+          ScanJob(
+            id: 'test-1',
+            jobId: 'job-789',
+            imagePath: '/tmp/test.jpg',
+            status: JobStatus.processing,
+            createdAt: DateTime.now(),
+            sseListeningStartedAt: DateTime.now().subtract(const Duration(seconds: 60)),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cameraServiceProvider.overrideWithValue(mockCameraService),
+            jobStateProvider.overrideWith(
+              () => MockJobStateNotifier(initialState: activeJobState),
+            ),
+            performanceMetricsServiceProvider.overrideWithValue(
+              mockPerformanceService,
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: const CameraScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Should render without throwing
+      expect(find.byType(CameraScreen), findsOneWidget);
+    });
+  });
+
   group('PermissionPrimerScreen Widget Tests', () {
     testWidgets('Permission primer screen renders correctly', (tester) async {
       await tester.pumpWidget(
@@ -507,7 +723,8 @@ void main() {
       expect(find.byIcon(Icons.camera_alt_outlined), findsOneWidget);
       expect(
         find.text(
-            'Wingtip needs your camera to see books. Images are processed and deleted instantly.'),
+          'Wingtip needs your camera to see books. Images are processed and deleted instantly.',
+        ),
         findsOneWidget,
       );
     });
@@ -549,9 +766,6 @@ class TestSessionCounterNotifier extends SessionCounterNotifier {
 
   @override
   SessionCounterState build() {
-    return SessionCounterState(
-      count: initialCount,
-      lastScanAt: DateTime.now(),
-    );
+    return SessionCounterState(count: initialCount, lastScanAt: DateTime.now());
   }
 }

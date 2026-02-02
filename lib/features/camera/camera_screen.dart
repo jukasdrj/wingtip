@@ -13,11 +13,15 @@ import 'dart:io';
 import 'package:wingtip/data/database_provider.dart';
 import 'package:wingtip/features/scancapture/local_processor_provider.dart';
 import 'package:wingtip/features/camera/session_counter_widget.dart';
+import 'package:wingtip/features/camera/object_overlay_painter.dart';
+import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart'
+    show InputImageRotation;
 import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/features/talaria/processing_stack_widget.dart';
 import 'package:wingtip/features/talaria/job_state_provider.dart';
 import 'package:wingtip/features/library/library_screen.dart';
 import 'package:wingtip/features/camera/stream_overlay.dart';
+import 'package:wingtip/features/talaria/scan_progress_overlay.dart';
 import 'package:wingtip/widgets/error_snack_bar.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
@@ -47,7 +51,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   double _baseExposureCompensation = 0.0;
   bool _isAdjustingExposure = false;
   double _swipeStartY = 0.0;
-  bool _isCapturing = false; // Added missing variable
+
+  // Stream & ML variables
+  bool _isStreaming = false;
+  bool _isProcessingFrame = false;
+  List<Map<String, dynamic>> _detectedObjects = [];
+  DateTime _lastFrameProcessedTime = DateTime.now();
+  // Target ~10 FPS for ML (100ms interval)
+  static const _minFrameInterval = Duration(milliseconds: 100);
 
   @override
   void initState() {
@@ -55,6 +66,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     WidgetsBinding.instance.addObserver(this);
     _initializeZoomLevels();
     _startCountdownTimer();
+    _startStream();
     _setupJobErrorListener();
     _setupJobCompletionListener();
   }
@@ -66,6 +78,21 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         state == AppLifecycleState.inactive) {
       // Reset session counter when app goes to background
       ref.read(sessionCounterProvider.notifier).reset();
+
+      // Cancel long-running active scan jobs (> 30 second grace period)
+      final jobState = ref.read(jobStateProvider);
+      final longRunningJobs = jobState.activeJobs.where((job) {
+        if (job.sseListeningStartedAt == null) return false;
+        final elapsed = DateTime.now().difference(job.sseListeningStartedAt!);
+        return elapsed.inSeconds > 30;
+      }).toList();
+
+      if (longRunningJobs.isNotEmpty) {
+        debugPrint(
+          '[CameraScreen] App backgrounded: cancelling ${longRunningJobs.length} long-running jobs',
+        );
+        ref.read(jobStateProvider.notifier).cancelActiveJobs();
+      }
     }
   }
 
@@ -106,17 +133,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         }
       }
     });
-  }
-
-  @override
-  void dispose() {
-    debugPrint('[CameraScreen] Disposing camera screen resources');
-    WidgetsBinding.instance.removeObserver(this);
-    _countdownTimer?.cancel();
-    _countdownTimer = null;
-    // Note: Camera controller disposal is handled by CameraService singleton
-    // to allow reuse when navigating back to camera screen
-    super.dispose();
   }
 
   void _startCountdownTimer() {
@@ -211,8 +227,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted) {
           setState(() {
-            _showFocusIndicator = false;
+            _showFocusIndicator = false; // Keep original line
           });
+
+          // Start stream for ML overlay
+          _startStream();
         }
       });
     } catch (e) {
@@ -411,14 +430,83 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         ErrorSnackBar.show(context, message: 'Failed to capture image: $e');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isCapturing = false;
-        });
-      }
       // Reset modes
       _resetCameraModesAsync(cameraService);
     }
+  }
+
+  Future<void> _startStream() async {
+    final cameraService = ref.read(cameraServiceProvider);
+    if (!cameraService.isInitialized || _isStreaming) return;
+
+    try {
+      await cameraService.startImageStream((CameraImage image) {
+        _processStreamFrame(image);
+      });
+      if (mounted) {
+        setState(() {
+          _isStreaming = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('[CameraScreen] Error starting stream: $e');
+    }
+  }
+
+  Future<void> _processStreamFrame(CameraImage image) async {
+    // Throttle frames
+    final now = DateTime.now();
+    if (_isProcessingFrame ||
+        now.difference(_lastFrameProcessedTime) < _minFrameInterval) {
+      return;
+    }
+
+    _isProcessingFrame = true;
+    _lastFrameProcessedTime = now;
+
+    try {
+      final cameraService = ref.read(cameraServiceProvider);
+      final sensorOrientation =
+          cameraService.controller!.description.sensorOrientation;
+
+      // Get device orientation (simplified for now, assume portrait up)
+      const deviceOrientation = DeviceOrientation.portraitUp;
+
+      final results = await ref
+          .read(localProcessorServiceProvider)
+          .processCameraImage(image, sensorOrientation, deviceOrientation);
+
+      if (mounted && results.containsKey('objects')) {
+        setState(() {
+          _detectedObjects = List<Map<String, dynamic>>.from(
+            results['objects'],
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('[CameraScreen] Error processing frame: $e');
+    } finally {
+      _isProcessingFrame = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    debugPrint('[CameraScreen] Disposing camera screen resources');
+    // Ensure stream is stopped
+    final cameraService = ref.read(cameraServiceProvider);
+    if (_isStreaming) {
+      cameraService.stopImageStream();
+    }
+    WidgetsBinding.instance.removeObserver(this);
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+
+    // Cancel active scan jobs and notify backend
+    debugPrint('[CameraScreen] Disposing: cancelling active jobs');
+    ref.read(jobStateProvider.notifier).cancelActiveJobs();
+
+    super.dispose();
   }
 
   /// Reset camera modes asynchronously without blocking capture
@@ -485,6 +573,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               // Auto-dismissal is handled by the overlay itself
             },
           ),
+          // Progressive results overlay for multi-book scans
+          if (activeJob?.totalBooks != null &&
+              activeJob!.totalBooks! > 0 &&
+              activeJob.currentBook != null)
+            ScanProgressOverlay(
+              currentBook: activeJob.currentBook!,
+              totalBooks: activeJob.totalBooks!,
+            ),
           _buildSessionCounter(),
           _buildLibraryButton(context),
           _buildRateLimitOverlay(),
@@ -527,7 +623,27 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           onVerticalDragEnd: _handleVerticalDragEnd,
           child: RepaintBoundary(
             // Isolate camera preview to avoid unnecessary repaints
-            child: CameraPreview(cameraService.controller!),
+            child: Stack(
+              children: [
+                Center(child: CameraPreview(cameraService.controller!)),
+                // Object Detection Overlay
+                if (_detectedObjects.isNotEmpty)
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: ObjectOverlayPainter(
+                        objects: _detectedObjects,
+                        absoluteImageSize: Size(
+                          cameraService.controller!.value.previewSize!.height,
+                          cameraService.controller!.value.previewSize!.width,
+                        ),
+                        // Assuming standard rotation for now - map types if needed
+                        rotation: InputImageRotation.rotation90deg,
+                      ),
+                    ),
+                  ),
+                // Flash animation overlay (existing)
+              ],
+            ),
           ),
         );
       },
