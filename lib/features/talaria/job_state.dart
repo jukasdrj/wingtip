@@ -11,6 +11,8 @@ class ScanJob {
   final Map<String, dynamic>? result;
   final DateTime createdAt;
   final DateTime? sseListeningStartedAt; // When SSE stream listening started
+  final int? totalBooks; // Total books detected in multi-book scan
+  final int? currentBook; // Current book being processed (1-indexed)
 
   const ScanJob({
     required this.id,
@@ -24,6 +26,8 @@ class ScanJob {
     this.result,
     required this.createdAt,
     this.sseListeningStartedAt,
+    this.totalBooks,
+    this.currentBook,
   });
 
   factory ScanJob.uploading(String imagePath) {
@@ -44,6 +48,8 @@ class ScanJob {
     String? progressMessage,
     Map<String, dynamic>? result,
     DateTime? sseListeningStartedAt,
+    int? totalBooks,
+    int? currentBook,
   }) {
     return ScanJob(
       id: id,
@@ -57,6 +63,8 @@ class ScanJob {
       result: result ?? this.result,
       createdAt: createdAt,
       sseListeningStartedAt: sseListeningStartedAt ?? this.sseListeningStartedAt,
+      totalBooks: totalBooks ?? this.totalBooks,
+      currentBook: currentBook ?? this.currentBook,
     );
   }
 }

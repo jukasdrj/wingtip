@@ -37,6 +37,12 @@ class SseEvent {
     );
   }
 
+  /// Total books detected in this scan (for multi-book progress)
+  int? get totalBooks => data['totalBooks'] as int?;
+
+  /// Current book being processed (1-indexed)
+  int? get currentBook => data['current'] as int?;
+
   @override
   String toString() => 'SseEvent(type: $type, data: $data)';
 }
