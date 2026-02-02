@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wingtip/core/theme.dart';
@@ -10,17 +11,26 @@ class PermissionPrimerScreen extends StatefulWidget {
   State<PermissionPrimerScreen> createState() => _PermissionPrimerScreenState();
 }
 
-class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> with WidgetsBindingObserver {
+class _PermissionPrimerScreenState extends State<PermissionPrimerScreen>
+    with WidgetsBindingObserver {
+  Timer? _permissionCheckTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     // Check permission status on first load
     _checkPermissionStatus();
+    // Poll for permission changes (e.g. if changed via CLI or Settings overlay)
+    _permissionCheckTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _checkPermissionStatus(),
+    );
   }
 
   @override
   void dispose() {
+    _permissionCheckTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -41,9 +51,7 @@ class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> with Wi
     if (status.isGranted) {
       // Permission granted, navigate to camera screen
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => const CameraScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const CameraScreen()),
       );
     }
   }
@@ -54,18 +62,22 @@ class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> with Wi
     debugPrint('[PermissionPrimer] Current camera status: $currentStatus');
     debugPrint('[PermissionPrimer] isGranted: ${currentStatus.isGranted}');
     debugPrint('[PermissionPrimer] isDenied: ${currentStatus.isDenied}');
-    debugPrint('[PermissionPrimer] isPermanentlyDenied: ${currentStatus.isPermanentlyDenied}');
-    debugPrint('[PermissionPrimer] isRestricted: ${currentStatus.isRestricted}');
+    debugPrint(
+      '[PermissionPrimer] isPermanentlyDenied: ${currentStatus.isPermanentlyDenied}',
+    );
+    debugPrint(
+      '[PermissionPrimer] isRestricted: ${currentStatus.isRestricted}',
+    );
     debugPrint('[PermissionPrimer] isLimited: ${currentStatus.isLimited}');
 
     // If already granted, navigate immediately
     if (currentStatus.isGranted) {
-      debugPrint('[PermissionPrimer] Permission already granted, navigating to camera');
+      debugPrint(
+        '[PermissionPrimer] Permission already granted, navigating to camera',
+      );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => const CameraScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const CameraScreen()),
       );
       return;
     }
@@ -81,9 +93,7 @@ class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> with Wi
       debugPrint('[PermissionPrimer] Permission granted, navigating to camera');
       // Permission granted, navigate to camera screen
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => const CameraScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const CameraScreen()),
       );
     } else if (status.isDenied) {
       debugPrint('[PermissionPrimer] Permission denied');

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "405750070953",
+    "project_id": "wingtip-f03f3",
+    "storage_bucket": "wingtip-f03f3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:405750070953:android:d90f4890093fd50c25b3b8",
+        "android_client_info": {
+          "package_name": "com.ooheynerds.wingtip"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjetkBPhAUR7YX3udBX8vK_Adj7OMV-c4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

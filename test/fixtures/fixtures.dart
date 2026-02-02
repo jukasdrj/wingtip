@@ -1,9 +1,10 @@
-/// Centralized export file for all test fixtures
+/// Centralized export file for all test fixtures.
 ///
 /// Import this file to access all test data in your tests:
 /// ```dart
 /// import 'package:wingtip/test/fixtures/fixtures.dart';
 /// ```
+library;
 
 // Books
 export 'books.dart';

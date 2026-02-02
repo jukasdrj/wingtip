@@ -20,6 +20,9 @@ import 'package:wingtip/services/failed_scans_cleanup_service_provider.dart';
 import 'package:wingtip/widgets/network_reconnect_listener.dart';
 import 'package:wingtip/widgets/shake_to_feedback_wrapper.dart';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:wingtip/firebase_options.dart';
+
 void main() async {
   // Initialize Sentry for crash reporting and analytics
   // Configure via: flutter run --dart-define=SENTRY_DSN="your-dsn-here"
@@ -42,6 +45,9 @@ Future<void> _runApp() async {
   // Preserve the splash screen
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
+  // Initialize Firebase
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Performance logging: App start time
   final appStartTime = DateTime.now();

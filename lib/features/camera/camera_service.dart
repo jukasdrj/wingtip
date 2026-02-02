@@ -32,7 +32,9 @@ class CameraService {
     if (_isInitialized) return;
 
     _initStartTime = DateTime.now();
-    debugPrint('[CameraService] Starting camera initialization at ${_initStartTime!.toIso8601String()}');
+    debugPrint(
+      '[CameraService] Starting camera initialization at ${_initStartTime!.toIso8601String()}',
+    );
 
     try {
       final cameras = await availableCameras();
@@ -43,7 +45,9 @@ class CameraService {
       }
 
       final camera = cameras.first;
-      debugPrint('[CameraService] Found ${cameras.length} camera(s), using ${camera.name}');
+      debugPrint(
+        '[CameraService] Found ${cameras.length} camera(s), using ${camera.name}',
+      );
 
       _controller = CameraController(
         camera,
@@ -59,7 +63,9 @@ class CameraService {
       _initEndTime = DateTime.now();
 
       final duration = initializationDuration;
-      debugPrint('[CameraService] Camera initialized successfully in ${duration?.inMilliseconds}ms');
+      debugPrint(
+        '[CameraService] Camera initialized successfully in ${duration?.inMilliseconds}ms',
+      );
 
       // iOS-specific enhancements
       if (Platform.isIOS) {
@@ -127,7 +133,9 @@ class CameraService {
       } else {
         // Reset to default book spine exposure
         await _controller!.setExposureOffset(0.7);
-        debugPrint('[CameraService] Night Mode disabled: exposure reset to +0.7');
+        debugPrint(
+          '[CameraService] Night Mode disabled: exposure reset to +0.7',
+        );
       }
     } catch (e) {
       debugPrint('[CameraService] Error toggling Night Mode: $e');
@@ -148,10 +156,37 @@ class CameraService {
     }
   }
 
+  Future<void> startImageStream(Function(CameraImage) onAvailable) async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (_controller!.value.isStreamingImages) return;
+
+    try {
+      await _controller!.startImageStream(onAvailable);
+      debugPrint('[CameraService] Image stream started');
+    } catch (e) {
+      debugPrint('[CameraService] Error starting image stream: $e');
+    }
+  }
+
+  Future<void> stopImageStream() async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (!_controller!.value.isStreamingImages) return;
+
+    try {
+      await _controller!.stopImageStream();
+      debugPrint('[CameraService] Image stream stopped');
+    } catch (e) {
+      debugPrint('[CameraService] Error stopping image stream: $e');
+    }
+  }
+
   Future<void> dispose() async {
     debugPrint('[CameraService] Disposing camera controller');
     if (_controller != null) {
       try {
+        if (_controller!.value.isStreamingImages) {
+          await _controller!.stopImageStream();
+        }
         await _controller!.dispose();
         debugPrint('[CameraService] Camera controller disposed successfully');
       } catch (e) {
