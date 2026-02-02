@@ -21,6 +21,27 @@ class ImageProcessingParams {
   });
 }
 
+/// Parameters for image enhancement in isolate
+class ImageEnhancementParams {
+  final String sourcePath;
+  final String outputDir;
+  final int maxDimension;
+  final int quality;
+  final double contrastMultiplier;
+  final int blurRadius;
+  final bool autoRotate;
+
+  ImageEnhancementParams({
+    required this.sourcePath,
+    required this.outputDir,
+    this.maxDimension = 2560,
+    this.quality = 90,
+    this.contrastMultiplier = 1.5,
+    this.blurRadius = 1,
+    this.autoRotate = true,
+  });
+}
+
 /// Result of image processing
 class ImageProcessingResult {
   final String outputPath;
@@ -33,6 +54,21 @@ class ImageProcessingResult {
     required this.processingTimeMs,
     required this.originalSize,
     required this.processedSize,
+  });
+}
+
+/// Result of image enhancement with additional metadata
+class ImageEnhancementResult extends ImageProcessingResult {
+  final bool wasRotated;
+  final double brightnessAdjustment;
+
+  ImageEnhancementResult({
+    required super.outputPath,
+    required super.processingTimeMs,
+    required super.originalSize,
+    required super.processedSize,
+    required this.wasRotated,
+    required this.brightnessAdjustment,
   });
 }
 
@@ -179,6 +215,186 @@ class ImageProcessor {
     return outputPath;
   }
 
+  /// Enhance image for upload: contrast, brightness, blur, rotation
+  ///
+  /// This method extends the basic processing with computer vision enhancements:
+  /// - Auto-rotation detection for vertical bookshelves
+  /// - Contrast boost (1.5x) for sharper spine text
+  /// - Auto-brightness adjustment based on histogram
+  /// - Lightweight Gaussian blur for noise reduction
+  /// - Higher resolution (2560px) and quality (90) than basic processing
+  ///
+  /// Uses compute() isolate for non-blocking UI.
+  static Future<ImageEnhancementResult> enhanceForUpload(
+    String sourcePath, {
+    WidgetRef? ref,
+  }) async {
+    final startTime = DateTime.now();
+
+    // Get temp directory for output
+    final tempDir = await getTemporaryDirectory();
+
+    final params = ImageEnhancementParams(
+      sourcePath: sourcePath,
+      outputDir: tempDir.path,
+      maxDimension: 2560,
+      quality: 90,
+      contrastMultiplier: 1.5,
+      blurRadius: 1,
+      autoRotate: true,
+    );
+
+    // Process in isolate
+    final result = await compute(_enhanceImageInIsolate, params);
+
+    // Get file sizes for metrics
+    final sourceFile = File(sourcePath);
+    final processedFile = File(result['outputPath'] as String);
+
+    final fileSizes = await Future.wait([
+      sourceFile.length(),
+      processedFile.length(),
+    ]);
+
+    final originalSize = fileSizes[0];
+    final processedSize = fileSizes[1];
+
+    final endTime = DateTime.now();
+    final processingTimeMs = endTime.difference(startTime).inMilliseconds;
+
+    debugPrint('[ImageProcessor] Image enhanced in ${processingTimeMs}ms');
+    debugPrint('[ImageProcessor] Original: ${(originalSize / 1024).toStringAsFixed(2)} KB → Enhanced: ${(processedSize / 1024).toStringAsFixed(2)} KB');
+    if (result['wasRotated'] as bool) {
+      debugPrint('[ImageProcessor] Auto-rotated (vertical bookshelf detected)');
+    }
+    debugPrint('[ImageProcessor] Brightness adjustment: ${result['brightnessAdjustment']}');
+
+    // Record metrics asynchronously
+    if (ref != null) {
+      Future.microtask(() {
+        ref
+            .read(imageProcessingMetricsNotifierProvider.notifier)
+            .recordProcessingTime(processingTimeMs);
+      });
+    }
+
+    return ImageEnhancementResult(
+      outputPath: result['outputPath'] as String,
+      processingTimeMs: processingTimeMs,
+      originalSize: originalSize,
+      processedSize: processedSize,
+      wasRotated: result['wasRotated'] as bool,
+      brightnessAdjustment: result['brightnessAdjustment'] as double,
+    );
+  }
+
+  /// Enhance image in isolate with CV pipeline
+  static Future<Map<String, dynamic>> _enhanceImageInIsolate(
+    ImageEnhancementParams params,
+  ) async {
+    // Read image file
+    final imageBytes = await File(params.sourcePath).readAsBytes();
+
+    // Decode image
+    img.Image? image = img.decodeImage(imageBytes);
+    if (image == null) {
+      throw Exception('Failed to decode image');
+    }
+
+    bool wasRotated = false;
+    double brightnessAdj = 1.0;
+
+    // Step 1: Rotation detection (BEFORE resize for correct aspect ratio)
+    final aspectRatio = image.height / image.width;
+    if (params.autoRotate && aspectRatio > 2.0) {
+      image = img.copyRotate(image, angle: -90);
+      wasRotated = true;
+    }
+
+    // Step 2: Resize to max dimension
+    final maxDim = image.width > image.height ? image.width : image.height;
+    if (maxDim > params.maxDimension) {
+      if (image.width > image.height) {
+        image = img.copyResize(
+          image,
+          width: params.maxDimension,
+          interpolation: img.Interpolation.linear,
+        );
+      } else {
+        image = img.copyResize(
+          image,
+          height: params.maxDimension,
+          interpolation: img.Interpolation.linear,
+        );
+      }
+    }
+
+    // Step 3: Contrast enhancement
+    image = img.adjustColor(image, contrast: params.contrastMultiplier);
+
+    // Step 4: Auto-brightness based on histogram
+    brightnessAdj = _calculateBrightnessAdjustment(image);
+    if (brightnessAdj != 1.0) {
+      image = img.adjustColor(image, brightness: brightnessAdj);
+    }
+
+    // Step 5: Lightweight noise reduction
+    if (params.blurRadius > 0) {
+      image = img.gaussianBlur(image, radius: params.blurRadius);
+    }
+
+    // Step 6: Encode to JPEG
+    final encodedBytes = img.encodeJpg(image, quality: params.quality);
+
+    // MEMORY: Dispose image after encoding
+    image.clear();
+
+    // Save to temp directory
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final outputPath = p.join(params.outputDir, 'enhanced_$timestamp.jpg');
+
+    final outputFile = File(outputPath);
+    await outputFile.writeAsBytes(encodedBytes);
+
+    return {
+      'outputPath': outputPath,
+      'wasRotated': wasRotated,
+      'brightnessAdjustment': brightnessAdj,
+    };
+  }
+
+  /// Calculate brightness adjustment based on image histogram
+  ///
+  /// Samples every 10th pixel for performance.
+  /// Returns multiplier: <1.0 darkens, >1.0 brightens, 1.0 no change.
+  static double _calculateBrightnessAdjustment(img.Image image) {
+    // Sample every 10th pixel for performance
+    int totalLuminance = 0;
+    int sampleCount = 0;
+
+    for (int y = 0; y < image.height; y += 10) {
+      for (int x = 0; x < image.width; x += 10) {
+        final pixel = image.getPixel(x, y);
+        final r = pixel.r.toInt();
+        final g = pixel.g.toInt();
+        final b = pixel.b.toInt();
+        // Standard luminance formula (ITU-R BT.709)
+        totalLuminance += (0.299 * r + 0.587 * g + 0.114 * b).round();
+        sampleCount++;
+      }
+    }
+
+    if (sampleCount == 0) return 1.0;
+    final avgLuminance = totalLuminance / sampleCount;
+
+    // Target mid-gray (128). Return multiplier.
+    if (avgLuminance < 80) return 1.3; // Very dark -> brighten significantly
+    if (avgLuminance < 100) return 1.15; // Dark -> brighten slightly
+    if (avgLuminance > 200) return 0.8; // Very bright -> darken
+    if (avgLuminance > 160) return 0.9; // Bright -> darken slightly
+    return 1.0; // Normal range, no adjustment
+  }
+
   /// Clean up temporary processed images older than 1 hour
   /// Call this periodically to prevent temp directory bloat
   static Future<void> cleanupOldTempFiles() async {
@@ -193,7 +409,9 @@ class ImageProcessor {
       int deletedCount = 0;
 
       await for (final entity in dir.list()) {
-        if (entity is File && entity.path.contains('processed_')) {
+        if (entity is File &&
+            (entity.path.contains('processed_') ||
+                entity.path.contains('enhanced_'))) {
           try {
             final stat = await entity.stat();
             if (stat.modified.isBefore(oneHourAgo)) {

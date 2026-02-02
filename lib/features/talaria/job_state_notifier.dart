@@ -17,6 +17,7 @@ import 'package:wingtip/core/sse_client_provider.dart';
 import 'package:wingtip/core/talaria_client_provider.dart';
 import 'package:wingtip/data/database.dart';
 import 'package:wingtip/data/database_provider.dart';
+import 'package:wingtip/features/camera/image_processor.dart';
 import 'package:wingtip/features/talaria/job_state.dart';
 import 'package:wingtip/services/failed_scan_retention_service.dart';
 import 'package:wingtip/services/widget_data_service.dart';
@@ -52,6 +53,31 @@ class JobStateNotifier extends Notifier<JobState> {
       // MEMORY: Cancel rate limit timer
       _rateLimitTimer?.cancel();
       _rateLimitTimer = null;
+
+      // BACKEND CLEANUP: Fire-and-forget cleanup for jobs active > 30 seconds
+      for (final job in state.activeJobs) {
+        if (job.jobId != null && job.sseListeningStartedAt != null) {
+          final elapsed = DateTime.now().difference(job.sseListeningStartedAt!);
+          if (elapsed.inSeconds > 30) {
+            debugPrint(
+              '[JobStateNotifier] Dispose: Sending cleanup for job ${job.jobId} (active ${elapsed.inSeconds}s)',
+            );
+            // Fire-and-forget: don't await, don't block disposal
+            ref.read(talariaClientProvider.future).then((client) {
+              client.cleanupJob(job.jobId!).catchError((e) {
+                debugPrint(
+                  '[JobStateNotifier] Dispose cleanup failed for ${job.jobId}: $e',
+                );
+              });
+            }).catchError((e) {
+              // Provider may already be disposed - silently ignore
+              debugPrint(
+                '[JobStateNotifier] Could not get client for cleanup: $e',
+              );
+            });
+          }
+        }
+      }
 
       debugPrint('[JobStateNotifier] Cleanup completed');
     });
@@ -273,8 +299,32 @@ class JobStateNotifier extends Notifier<JobState> {
       // Track upload time
       final uploadStartTime = DateTime.now();
 
-      // Upload to Talaria
-      final response = await client.uploadImage(imagePath);
+      // NEW: Preprocess image for better recognition accuracy
+      String uploadPath = imagePath; // Default: use raw image
+      try {
+        debugPrint('[JobStateNotifier] Starting image enhancement...');
+
+        final enhanceResult = await ImageProcessor.enhanceForUpload(imagePath);
+        uploadPath = enhanceResult.outputPath;
+
+        debugPrint(
+            '[JobStateNotifier] Enhancement completed in ${enhanceResult.processingTimeMs}ms');
+        if (enhanceResult.wasRotated) {
+          debugPrint(
+              '[JobStateNotifier] Image was auto-rotated (vertical bookshelf detected)');
+          // Update job with rotation feedback message
+          _updateJob(job.id, job.copyWith(
+            progressMessage: 'Detected vertical bookshelf, rotated image',
+          ));
+        }
+      } catch (e) {
+        debugPrint(
+            '[JobStateNotifier] Enhancement failed, using raw image: $e');
+        // Fallback: upload raw image (preprocessing is optional)
+      }
+
+      // Upload enhanced (or raw fallback) image
+      final response = await client.uploadImage(uploadPath);
 
       // Record upload time
       final uploadDuration = DateTime.now().difference(uploadStartTime);
@@ -588,12 +638,16 @@ class JobStateNotifier extends Notifier<JobState> {
       case SseEventType.progress:
         final progress = event.data['progress'] as num? ?? 0.0;
         final message = event.data['message'] as String?;
+        final totalBooks = event.totalBooks;
+        final currentBook = event.currentBook;
         _updateJob(
           jobId,
           job.copyWith(
             status: JobStatus.processing,
             progress: progress.toDouble(),
             progressMessage: message,
+            totalBooks: totalBooks,
+            currentBook: currentBook,
           ),
         );
 
@@ -909,6 +963,62 @@ class JobStateNotifier extends Notifier<JobState> {
       debugPrint('[JobStateNotifier] Cleanup failed: $e');
       // Don't fail the job if cleanup fails - it's already completed
     }
+  }
+
+  /// Cancel all active scan jobs and notify backend to stop processing.
+  ///
+  /// Unlike _cleanupJob(), this does NOT delete local image files
+  /// (images are preserved for the failed scan retry queue).
+  /// Backend cleanup is fire-and-forget (errors silently logged).
+  Future<void> cancelActiveJobs() async {
+    final activeJobs = state.activeJobs;
+    if (activeJobs.isEmpty) {
+      debugPrint('[JobStateNotifier] No active jobs to cancel');
+      return;
+    }
+
+    debugPrint('[JobStateNotifier] Cancelling ${activeJobs.length} active jobs');
+
+    // 1. Cancel all SSE subscriptions immediately (stops receiving events)
+    for (final job in activeJobs) {
+      await _sseSubscriptions[job.id]?.cancel();
+      _sseSubscriptions.remove(job.id);
+      debugPrint('[JobStateNotifier] Cancelled SSE subscription for job ${job.id}');
+    }
+
+    // 2. Update all active job states to cancelled
+    for (final job in activeJobs) {
+      _updateJob(
+        job.id,
+        job.copyWith(
+          status: JobStatus.error,
+          errorMessage: 'Scan cancelled',
+        ),
+      );
+    }
+
+    // 3. Send backend cleanup (fire-and-forget, DO NOT delete local files)
+    try {
+      final client = await ref.read(talariaClientProvider.future);
+      for (final job in activeJobs) {
+        if (job.jobId != null) {
+          // Fire-and-forget cleanup
+          client.cleanupJob(job.jobId!).then((_) {
+            debugPrint(
+              '[JobStateNotifier] Backend cleanup sent for ${job.jobId}',
+            );
+          }).catchError((e) {
+            debugPrint(
+              '[JobStateNotifier] Backend cleanup failed for ${job.jobId}: $e',
+            );
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[JobStateNotifier] Could not get client for cleanup: $e');
+    }
+
+    debugPrint('[JobStateNotifier] Active job cancellation completed');
   }
 
   /// Reset state to idle
