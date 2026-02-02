@@ -43,7 +43,10 @@ class ObjectOverlayPainter extends CustomPainter {
       canvas.drawRect(scaledRect, fillPaint);
 
       // Draw label background
-      final labelText = "Book"; // Or use object labels
+      final labels = object['labels'] as List<dynamic>?;
+      final labelText = labels != null && labels.isNotEmpty
+          ? (labels[0] as Map<String, dynamic>)['text'] as String
+          : 'Object';
       final textSpan = TextSpan(
         text: labelText,
         style: const TextStyle(

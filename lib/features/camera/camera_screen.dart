@@ -14,6 +14,9 @@ import 'package:wingtip/data/database_provider.dart';
 import 'package:wingtip/features/scancapture/local_processor_provider.dart';
 import 'package:wingtip/features/camera/session_counter_widget.dart';
 import 'package:wingtip/features/camera/object_overlay_painter.dart';
+import 'package:wingtip/features/camera/barcode_overlay_painter.dart';
+import 'package:wingtip/services/barcode_service.dart';
+import 'package:wingtip/services/barcode_service_provider.dart';
 import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart'
     show InputImageRotation;
 import 'package:wingtip/features/talaria/job_state.dart';
@@ -56,6 +59,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   bool _isStreaming = false;
   bool _isProcessingFrame = false;
   List<Map<String, dynamic>> _detectedObjects = [];
+  List<Map<String, dynamic>> _detectedBarcodes = [];
+  bool _barcodeHapticFired = false;
   DateTime _lastFrameProcessedTime = DateTime.now();
   // Target ~10 FPS for ML (100ms interval)
   static const _minFrameInterval = Duration(milliseconds: 100);
@@ -390,6 +395,36 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       // Record shutter latency metric (non-blocking)
       _recordShutterLatencyAsync(captureLatency.inMilliseconds);
 
+      // Check for detected ISBN barcode and perform deduplication check
+      String? detectedIsbn;
+      if (_detectedBarcodes.isNotEmpty) {
+        detectedIsbn = _detectedBarcodes.first['isbn'] as String?;
+        if (detectedIsbn != null) {
+          debugPrint('[CameraScreen] Detected ISBN barcode: $detectedIsbn');
+
+          // Check if book already exists in library
+          final database = ref.read(databaseProvider);
+          final existingBook = await database.getBookByIsbn(detectedIsbn);
+
+          if (existingBook != null && mounted) {
+            // Book already in library - show message and abort upload
+            debugPrint('[CameraScreen] Book already in library: ${existingBook.title}');
+            HapticFeedback.mediumImpact();
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Book already in library: ${existingBook.title}'),
+                  duration: const Duration(seconds: 3),
+                  backgroundColor: AppTheme.borderGray,
+                ),
+              );
+            }
+            return;
+          }
+        }
+      }
+
       // 1. Add to Review Queue
       final database = ref.read(databaseProvider);
       final reviewQueueId = await database.addToReviewQueue(
@@ -416,9 +451,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           });
 
       // 3. Trigger Backend Upload (Background)
-      // Pass reviewQueueId so results are routed to the queue item
+      // Pass reviewQueueId and ISBN hint (if detected) so results are routed to the queue item
       final jobNotifier = ref.read(jobStateProvider.notifier);
-      jobNotifier.uploadImage(imagePath, reviewQueueId: reviewQueueId);
+      jobNotifier.uploadImage(imagePath, reviewQueueId: reviewQueueId, isbnHint: detectedIsbn);
 
       // 4. UI Feedback
       if (mounted) {
@@ -472,16 +507,43 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       // Get device orientation (simplified for now, assume portrait up)
       const deviceOrientation = DeviceOrientation.portraitUp;
 
-      final results = await ref
-          .read(localProcessorServiceProvider)
-          .processCameraImage(image, sensorOrientation, deviceOrientation);
+      // Run object detection and barcode detection in parallel
+      final results = await Future.wait([
+        ref
+            .read(localProcessorServiceProvider)
+            .processCameraImage(image, sensorOrientation, deviceOrientation),
+        ref
+            .read(barcodeServiceProvider)
+            .scanFromCameraImage(image, sensorOrientation, deviceOrientation),
+      ]);
 
-      if (mounted && results.containsKey('objects')) {
+      final objectResults = results[0] as Map<String, dynamic>;
+      final barcodeResults = results[1] as List<IsbnResult>;
+
+      if (mounted) {
         setState(() {
-          _detectedObjects = List<Map<String, dynamic>>.from(
-            results['objects'],
-          );
+          if (objectResults.containsKey('objects')) {
+            _detectedObjects = List<Map<String, dynamic>>.from(
+              objectResults['objects'],
+            );
+          }
+
+          // Convert IsbnResult to Map format for overlay painter
+          _detectedBarcodes = barcodeResults
+              .map((result) => {
+                    'isbn': result.isbn,
+                    'boundingBox': result.boundingBox,  // Pass Rect directly
+                  })
+              .toList();
         });
+
+        // Trigger haptic feedback only once per barcode detection session
+        if (barcodeResults.isNotEmpty && !_barcodeHapticFired) {
+          HapticFeedback.selectionClick();
+          _barcodeHapticFired = true;
+        } else if (barcodeResults.isEmpty && _barcodeHapticFired) {
+          _barcodeHapticFired = false;  // Reset when no barcodes detected
+        }
       }
     } catch (e) {
       debugPrint('[CameraScreen] Error processing frame: $e');
@@ -637,6 +699,20 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                           cameraService.controller!.value.previewSize!.width,
                         ),
                         // Assuming standard rotation for now - map types if needed
+                        rotation: InputImageRotation.rotation90deg,
+                      ),
+                    ),
+                  ),
+                // Barcode Detection Overlay
+                if (_detectedBarcodes.isNotEmpty)
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: BarcodeOverlayPainter(
+                        barcodes: _detectedBarcodes,
+                        absoluteImageSize: Size(
+                          cameraService.controller!.value.previewSize!.height,
+                          cameraService.controller!.value.previewSize!.width,
+                        ),
                         rotation: InputImageRotation.rotation90deg,
                       ),
                     ),

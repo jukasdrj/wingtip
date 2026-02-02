@@ -33,14 +33,24 @@ class TalariaClient {
   ///
   /// Returns a [ScanJobResponse] containing the jobId and streamUrl for SSE listening.
   /// Throws [DioException] on network errors or non-202 responses.
-  Future<ScanJobResponse> uploadImage(String imagePath) async {
-    final formData = FormData.fromMap({
+  ///
+  /// [isbnHint] is an optional ISBN detected via barcode scanning that can be passed
+  /// as a hint to the backend for faster processing. Backend may ignore this field.
+  Future<ScanJobResponse> uploadImage(String imagePath, {String? isbnHint}) async {
+    final formFields = <String, dynamic>{
       'image': await MultipartFile.fromFile(
         imagePath,
         filename: imagePath.split('/').last,
       ),
       'device_id': _deviceId,
-    });
+    };
+
+    // Add ISBN hint as multipart form field if available
+    if (isbnHint != null) {
+      formFields['isbn_hint'] = isbnHint;
+    }
+
+    final formData = FormData.fromMap(formFields);
 
     final response = await _dio.post(
       '/v3/jobs/scans',

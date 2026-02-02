@@ -154,7 +154,7 @@ class MockTalariaClient extends TalariaClient {
         );
 
   @override
-  Future<ScanJobResponse> uploadImage(String imagePath) async {
+  Future<ScanJobResponse> uploadImage(String imagePath, {String? isbnHint}) async {
     // Simulate network delay
     await Future.delayed(const Duration(milliseconds: 50));
 

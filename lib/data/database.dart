@@ -617,6 +617,11 @@ class AppDatabase extends _$AppDatabase {
     return (delete(books)..where((t) => t.isbn.isIn(isbns))).go();
   }
 
+  /// Get a single book by its ISBN, or null if not found.
+  Future<Book?> getBookByIsbn(String isbn) {
+    return (select(books)..where((t) => t.isbn.equals(isbn))).getSingleOrNull();
+  }
+
   // Save a failed scan to the database
   Future<void> saveFailedScan({
     required String jobId,

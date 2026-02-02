@@ -275,8 +275,11 @@ class JobStateNotifier extends Notifier<JobState> {
 
   /// Upload an image to Talaria for analysis
   ///
-  /// Adds a new job to the queue and starts processing
-  Future<void> uploadImage(String imagePath, {int? reviewQueueId}) async {
+  /// Adds a new job to the queue and starts processing.
+  ///
+  /// [isbnHint] is an optional ISBN detected via barcode scanning that can be passed
+  /// as a hint to the backend for faster processing.
+  Future<void> uploadImage(String imagePath, {int? reviewQueueId, String? isbnHint}) async {
     ScanJob? job;
     try {
       // Create new job in uploading state
@@ -287,10 +290,15 @@ class JobStateNotifier extends Notifier<JobState> {
 
       debugPrint('[JobStateNotifier] Created job ${job.id}: $imagePath');
 
-      // Log analytics event
+      // Log analytics event (with ISBN hint if available)
+      final analyticsParams = {'job_id': job.id};
+      if (isbnHint != null) {
+        analyticsParams['isbn_hint'] = isbnHint;
+        debugPrint('[JobStateNotifier] Upload includes ISBN hint: $isbnHint');
+      }
       CrashReportingService.logEvent(
         'scan_started',
-        parameters: {'job_id': job.id},
+        parameters: analyticsParams,
       );
 
       // Get TalariaClient from provider
@@ -323,8 +331,8 @@ class JobStateNotifier extends Notifier<JobState> {
         // Fallback: upload raw image (preprocessing is optional)
       }
 
-      // Upload enhanced (or raw fallback) image
-      final response = await client.uploadImage(uploadPath);
+      // Upload enhanced (or raw fallback) image with optional ISBN hint
+      final response = await client.uploadImage(uploadPath, isbnHint: isbnHint);
 
       // Record upload time
       final uploadDuration = DateTime.now().difference(uploadStartTime);

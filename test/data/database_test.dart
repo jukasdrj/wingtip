@@ -344,6 +344,77 @@ void main() {
     });
   });
 
+  group('Get Book by ISBN', () {
+    test('should return book when ISBN exists', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final book = BooksCompanion(
+        isbn: const Value('978-0-123456-78-9'),
+        title: const Value('Test Book'),
+        author: const Value('Test Author'),
+        format: const Value('Hardcover'),
+        addedDate: Value(now),
+        spineConfidence: const Value(0.95),
+      );
+
+      await database.into(database.books).insert(book);
+
+      final result = await database.getBookByIsbn('978-0-123456-78-9');
+
+      expect(result != null, true);
+      expect(result!.isbn, '978-0-123456-78-9');
+      expect(result.title, 'Test Book');
+      expect(result.author, 'Test Author');
+      expect(result.format, 'Hardcover');
+      expect(result.spineConfidence, 0.95);
+    });
+
+    test('should return null when ISBN does not exist', () async {
+      final result = await database.getBookByIsbn('978-0-999999-99-9');
+      expect(result == null, true);
+    });
+
+    test('should return null for empty ISBN string', () async {
+      final result = await database.getBookByIsbn('');
+      expect(result == null, true);
+    });
+
+    test('should handle multiple books and return correct one', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      final book1 = BooksCompanion(
+        isbn: const Value('978-0-111111-11-1'),
+        title: const Value('Book One'),
+        author: const Value('Author One'),
+        addedDate: Value(now),
+      );
+
+      final book2 = BooksCompanion(
+        isbn: const Value('978-0-222222-22-2'),
+        title: const Value('Book Two'),
+        author: const Value('Author Two'),
+        addedDate: Value(now),
+      );
+
+      final book3 = BooksCompanion(
+        isbn: const Value('978-0-333333-33-3'),
+        title: const Value('Book Three'),
+        author: const Value('Author Three'),
+        addedDate: Value(now),
+      );
+
+      await database.into(database.books).insert(book1);
+      await database.into(database.books).insert(book2);
+      await database.into(database.books).insert(book3);
+
+      final result = await database.getBookByIsbn('978-0-222222-22-2');
+
+      expect(result != null, true);
+      expect(result!.isbn, '978-0-222222-22-2');
+      expect(result.title, 'Book Two');
+      expect(result.author, 'Author Two');
+    });
+  });
+
   group('FTS5 Search', () {
     setUp(() async {
       // Add test books
