@@ -1628,6 +1628,17 @@ class $ReviewQueueTable extends ReviewQueue
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _talariaJobIdMeta = const VerificationMeta(
+    'talariaJobId',
+  );
+  @override
+  late final GeneratedColumn<String> talariaJobId = GeneratedColumn<String>(
+    'talaria_job_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1646,6 +1657,7 @@ class $ReviewQueueTable extends ReviewQueue
     status,
     mlResult,
     backendResult,
+    talariaJobId,
     createdAt,
   ];
   @override
@@ -1692,6 +1704,15 @@ class $ReviewQueueTable extends ReviewQueue
         ),
       );
     }
+    if (data.containsKey('talaria_job_id')) {
+      context.handle(
+        _talariaJobIdMeta,
+        talariaJobId.isAcceptableOrUnknown(
+          data['talaria_job_id']!,
+          _talariaJobIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1729,6 +1750,10 @@ class $ReviewQueueTable extends ReviewQueue
         DriftSqlType.string,
         data['${effectivePrefix}backend_result'],
       ),
+      talariaJobId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}talaria_job_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -1748,6 +1773,7 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
   final String status;
   final String? mlResult;
   final String? backendResult;
+  final String? talariaJobId;
   final int createdAt;
   const ReviewQueueItem({
     required this.id,
@@ -1755,6 +1781,7 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
     required this.status,
     this.mlResult,
     this.backendResult,
+    this.talariaJobId,
     required this.createdAt,
   });
   @override
@@ -1768,6 +1795,9 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
     }
     if (!nullToAbsent || backendResult != null) {
       map['backend_result'] = Variable<String>(backendResult);
+    }
+    if (!nullToAbsent || talariaJobId != null) {
+      map['talaria_job_id'] = Variable<String>(talariaJobId);
     }
     map['created_at'] = Variable<int>(createdAt);
     return map;
@@ -1784,6 +1814,9 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
       backendResult: backendResult == null && nullToAbsent
           ? const Value.absent()
           : Value(backendResult),
+      talariaJobId: talariaJobId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(talariaJobId),
       createdAt: Value(createdAt),
     );
   }
@@ -1799,6 +1832,7 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
       status: serializer.fromJson<String>(json['status']),
       mlResult: serializer.fromJson<String?>(json['mlResult']),
       backendResult: serializer.fromJson<String?>(json['backendResult']),
+      talariaJobId: serializer.fromJson<String?>(json['talariaJobId']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
     );
   }
@@ -1811,6 +1845,7 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
       'status': serializer.toJson<String>(status),
       'mlResult': serializer.toJson<String?>(mlResult),
       'backendResult': serializer.toJson<String?>(backendResult),
+      'talariaJobId': serializer.toJson<String?>(talariaJobId),
       'createdAt': serializer.toJson<int>(createdAt),
     };
   }
@@ -1821,6 +1856,7 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
     String? status,
     Value<String?> mlResult = const Value.absent(),
     Value<String?> backendResult = const Value.absent(),
+    Value<String?> talariaJobId = const Value.absent(),
     int? createdAt,
   }) => ReviewQueueItem(
     id: id ?? this.id,
@@ -1830,6 +1866,7 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
     backendResult: backendResult.present
         ? backendResult.value
         : this.backendResult,
+    talariaJobId: talariaJobId.present ? talariaJobId.value : this.talariaJobId,
     createdAt: createdAt ?? this.createdAt,
   );
   ReviewQueueItem copyWithCompanion(ReviewQueueCompanion data) {
@@ -1841,6 +1878,9 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
       backendResult: data.backendResult.present
           ? data.backendResult.value
           : this.backendResult,
+      talariaJobId: data.talariaJobId.present
+          ? data.talariaJobId.value
+          : this.talariaJobId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1853,14 +1893,22 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
           ..write('status: $status, ')
           ..write('mlResult: $mlResult, ')
           ..write('backendResult: $backendResult, ')
+          ..write('talariaJobId: $talariaJobId, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, imagePath, status, mlResult, backendResult, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    imagePath,
+    status,
+    mlResult,
+    backendResult,
+    talariaJobId,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1870,6 +1918,7 @@ class ReviewQueueItem extends DataClass implements Insertable<ReviewQueueItem> {
           other.status == this.status &&
           other.mlResult == this.mlResult &&
           other.backendResult == this.backendResult &&
+          other.talariaJobId == this.talariaJobId &&
           other.createdAt == this.createdAt);
 }
 
@@ -1879,6 +1928,7 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
   final Value<String> status;
   final Value<String?> mlResult;
   final Value<String?> backendResult;
+  final Value<String?> talariaJobId;
   final Value<int> createdAt;
   const ReviewQueueCompanion({
     this.id = const Value.absent(),
@@ -1886,6 +1936,7 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
     this.status = const Value.absent(),
     this.mlResult = const Value.absent(),
     this.backendResult = const Value.absent(),
+    this.talariaJobId = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   ReviewQueueCompanion.insert({
@@ -1894,6 +1945,7 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
     this.status = const Value.absent(),
     this.mlResult = const Value.absent(),
     this.backendResult = const Value.absent(),
+    this.talariaJobId = const Value.absent(),
     required int createdAt,
   }) : imagePath = Value(imagePath),
        createdAt = Value(createdAt);
@@ -1903,6 +1955,7 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
     Expression<String>? status,
     Expression<String>? mlResult,
     Expression<String>? backendResult,
+    Expression<String>? talariaJobId,
     Expression<int>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -1911,6 +1964,7 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
       if (status != null) 'status': status,
       if (mlResult != null) 'ml_result': mlResult,
       if (backendResult != null) 'backend_result': backendResult,
+      if (talariaJobId != null) 'talaria_job_id': talariaJobId,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -1921,6 +1975,7 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
     Value<String>? status,
     Value<String?>? mlResult,
     Value<String?>? backendResult,
+    Value<String?>? talariaJobId,
     Value<int>? createdAt,
   }) {
     return ReviewQueueCompanion(
@@ -1929,6 +1984,7 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
       status: status ?? this.status,
       mlResult: mlResult ?? this.mlResult,
       backendResult: backendResult ?? this.backendResult,
+      talariaJobId: talariaJobId ?? this.talariaJobId,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -1951,6 +2007,9 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
     if (backendResult.present) {
       map['backend_result'] = Variable<String>(backendResult.value);
     }
+    if (talariaJobId.present) {
+      map['talaria_job_id'] = Variable<String>(talariaJobId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -1965,6 +2024,7 @@ class ReviewQueueCompanion extends UpdateCompanion<ReviewQueueItem> {
           ..write('status: $status, ')
           ..write('mlResult: $mlResult, ')
           ..write('backendResult: $backendResult, ')
+          ..write('talariaJobId: $talariaJobId, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -2840,6 +2900,7 @@ typedef $$ReviewQueueTableCreateCompanionBuilder =
       Value<String> status,
       Value<String?> mlResult,
       Value<String?> backendResult,
+      Value<String?> talariaJobId,
       required int createdAt,
     });
 typedef $$ReviewQueueTableUpdateCompanionBuilder =
@@ -2849,6 +2910,7 @@ typedef $$ReviewQueueTableUpdateCompanionBuilder =
       Value<String> status,
       Value<String?> mlResult,
       Value<String?> backendResult,
+      Value<String?> talariaJobId,
       Value<int> createdAt,
     });
 
@@ -2883,6 +2945,11 @@ class $$ReviewQueueTableFilterComposer
 
   ColumnFilters<String> get backendResult => $composableBuilder(
     column: $table.backendResult,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get talariaJobId => $composableBuilder(
+    column: $table.talariaJobId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2926,6 +2993,11 @@ class $$ReviewQueueTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get talariaJobId => $composableBuilder(
+    column: $table.talariaJobId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2955,6 +3027,11 @@ class $$ReviewQueueTableAnnotationComposer
 
   GeneratedColumn<String> get backendResult => $composableBuilder(
     column: $table.backendResult,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get talariaJobId => $composableBuilder(
+    column: $table.talariaJobId,
     builder: (column) => column,
   );
 
@@ -2998,6 +3075,7 @@ class $$ReviewQueueTableTableManager
                 Value<String> status = const Value.absent(),
                 Value<String?> mlResult = const Value.absent(),
                 Value<String?> backendResult = const Value.absent(),
+                Value<String?> talariaJobId = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
               }) => ReviewQueueCompanion(
                 id: id,
@@ -3005,6 +3083,7 @@ class $$ReviewQueueTableTableManager
                 status: status,
                 mlResult: mlResult,
                 backendResult: backendResult,
+                talariaJobId: talariaJobId,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -3014,6 +3093,7 @@ class $$ReviewQueueTableTableManager
                 Value<String> status = const Value.absent(),
                 Value<String?> mlResult = const Value.absent(),
                 Value<String?> backendResult = const Value.absent(),
+                Value<String?> talariaJobId = const Value.absent(),
                 required int createdAt,
               }) => ReviewQueueCompanion.insert(
                 id: id,
@@ -3021,6 +3101,7 @@ class $$ReviewQueueTableTableManager
                 status: status,
                 mlResult: mlResult,
                 backendResult: backendResult,
+                talariaJobId: talariaJobId,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0

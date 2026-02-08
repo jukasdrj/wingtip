@@ -93,6 +93,8 @@ class ReviewQueue extends Table {
       text().withDefault(const Constant('processing_local'))();
   TextColumn get mlResult => text().nullable()(); // JSON
   TextColumn get backendResult => text().nullable()(); // JSON
+  TextColumn get talariaJobId =>
+      text().nullable()(); // Maps to Talaria server job ID for persistence
   IntColumn get createdAt => integer()();
 }
 
@@ -105,7 +107,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.test(super.executor);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -212,6 +214,10 @@ class AppDatabase extends _$AppDatabase {
         if (from < 7) {
           // Add ReviewQueue table
           await m.createTable(reviewQueue);
+        }
+        if (from < 8) {
+          // Add talariaJobId column to review_queue for persistent job mapping
+          await m.addColumn(reviewQueue, reviewQueue.talariaJobId);
         }
       },
     );
@@ -728,24 +734,83 @@ class AppDatabase extends _$AppDatabase {
     )..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
+  /// Status priority for review queue items.
+  /// Higher index = higher priority. A status update is only applied
+  /// if the new status has equal or higher priority than the current status.
+  static const _statusPriority = <String, int>{
+    'processing_local': 0,
+    'processing_backend': 1,
+    'ready': 2,
+    'accepted': 3,
+    'rejected': 4,
+    'error': 5,
+  };
+
+  /// Update a review queue item.
+  ///
+  /// [clearTalariaJobId] - if true, sets talariaJobId to NULL in the database.
+  /// [talariaJobId] - if non-null, sets the talariaJobId to this value.
+  /// If both are false/null, talariaJobId is left unchanged.
   Future<bool> updateReviewQueueItem({
     required int id,
     String? status,
     String? mlResult,
     String? backendResult,
+    String? talariaJobId,
+    bool clearTalariaJobId = false,
   }) async {
+    // If a status change is requested, enforce priority ordering
+    String? effectiveStatus = status;
+    if (status != null) {
+      final current = await getReviewQueueItem(id);
+      if (current != null) {
+        final currentPriority = _statusPriority[current.status] ?? 0;
+        final newPriority = _statusPriority[status] ?? 0;
+        if (newPriority < currentPriority) {
+          debugPrint(
+            '[Database] Ignoring status downgrade for review queue item $id: '
+            '${current.status} (priority $currentPriority) -> $status (priority $newPriority)',
+          );
+          effectiveStatus = null; // Don't change status
+        }
+      }
+    }
+
+    // Determine talariaJobId value
+    Value<String?> talariaJobIdValue;
+    if (clearTalariaJobId) {
+      talariaJobIdValue = const Value(null);
+    } else if (talariaJobId != null) {
+      talariaJobIdValue = Value(talariaJobId);
+    } else {
+      talariaJobIdValue = const Value.absent();
+    }
+
+    // If there's nothing to update after priority check, still update data fields
     final companion = ReviewQueueCompanion(
       id: Value(id),
-      status: status != null ? Value(status) : const Value.absent(),
+      status: effectiveStatus != null ? Value(effectiveStatus) : const Value.absent(),
       mlResult: mlResult != null ? Value(mlResult) : const Value.absent(),
       backendResult: backendResult != null
           ? Value(backendResult)
           : const Value.absent(),
+      talariaJobId: talariaJobIdValue,
     );
     final count = await (update(
       reviewQueue,
     )..where((t) => t.id.equals(id))).write(companion);
     return count > 0;
+  }
+
+  /// Get all review queue items that have an active Talaria job ID.
+  /// Used to rebuild the in-memory job-to-review-queue mapping on startup.
+  Future<List<ReviewQueueItem>> getReviewQueueItemsWithJobId() async {
+    return (select(reviewQueue)
+          ..where((t) => t.talariaJobId.isNotNull())
+          ..where(
+            (t) => t.status.isIn(['processing_local', 'processing_backend']),
+          ))
+        .get();
   }
 
   Future<int> deleteReviewQueueItem(int id) {

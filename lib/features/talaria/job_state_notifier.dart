@@ -82,7 +82,36 @@ class JobStateNotifier extends Notifier<JobState> {
       debugPrint('[JobStateNotifier] Cleanup completed');
     });
 
+    // Rebuild in-memory job-to-review-queue mapping from persisted data
+    _rebuildJobReviewQueueMap();
+
     return JobState.idle();
+  }
+
+  /// Rebuild the in-memory job-to-review-queue mapping from the database.
+  /// Called on notifier initialization to recover mappings after app restart.
+  Future<void> _rebuildJobReviewQueueMap() async {
+    try {
+      final database = ref.read(databaseProvider);
+      final items = await database.getReviewQueueItemsWithJobId();
+      for (final item in items) {
+        if (item.talariaJobId != null) {
+          _jobReviewQueueMap[item.talariaJobId!] = item.id;
+          debugPrint(
+            '[JobStateNotifier] Restored mapping: ${item.talariaJobId} -> ${item.id}',
+          );
+        }
+      }
+      if (items.isNotEmpty) {
+        debugPrint(
+          '[JobStateNotifier] Rebuilt ${items.length} job-to-review-queue mappings from database',
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        '[JobStateNotifier] Failed to rebuild job-review-queue map: $e',
+      );
+    }
   }
 
   /// Retry a failed scan by job ID
@@ -358,17 +387,16 @@ class JobStateNotifier extends Notifier<JobState> {
         ),
       );
 
-      // Store review queue mapping if provided
+      // Store review queue mapping if provided, and persist to database
       if (reviewQueueId != null) {
         _jobReviewQueueMap[response.jobId] = reviewQueueId;
-      }
 
-      // Update ReviewQueueItem status to 'processing_backend'
-      if (reviewQueueId != null) {
         final database = ref.read(databaseProvider);
+        // Persist the talariaJobId and update status atomically
         await database.updateReviewQueueItem(
           id: reviewQueueId,
           status: 'processing_backend',
+          talariaJobId: response.jobId,
         );
       }
 
@@ -821,12 +849,13 @@ class JobStateNotifier extends Notifier<JobState> {
           id: reviewQueueId!,
           status: 'ready',
           backendResult: jsonEncode(resultData),
+          clearTalariaJobId: true, // Clear persisted mapping now that result is saved
         );
         debugPrint(
           '[JobStateNotifier] Updated review queue item $reviewQueueId with backend result',
         );
 
-        // Cleanup mapping
+        // Cleanup in-memory mapping
         _jobReviewQueueMap.remove(serverJobId);
         return;
       }

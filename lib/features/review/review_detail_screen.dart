@@ -129,16 +129,40 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
     final database = ref.read(databaseProvider);
 
     try {
+      // Extract enrichment fields from backend result if available
+      String? coverUrl;
+      String? format;
+      double? spineConfidence;
+      if (widget.item.backendResult != null) {
+        try {
+          final backendData = jsonDecode(widget.item.backendResult!);
+          coverUrl = backendData['coverUrl'] as String?;
+          format = backendData['format'] as String?;
+          final rawConfidence = backendData['spineConfidence'];
+          if (rawConfidence is num) {
+            spineConfidence = rawConfidence.toDouble();
+          }
+        } catch (e) {
+          debugPrint('Error extracting enrichment data: $e');
+        }
+      }
+
       // 1. Insert into Books table
       final book = BooksCompanion.insert(
         isbn: isbn,
         title: title,
         author: author,
         addedDate: DateTime.now().millisecondsSinceEpoch,
-        spineImagePath: Value(
-          widget.item.imagePath,
-        ), // Save the captured image as spine image
-        // We could also try to set coverUrl if backend result had it
+        spineImagePath: Value(widget.item.imagePath),
+        coverUrl: coverUrl != null && coverUrl.isNotEmpty
+            ? Value(coverUrl)
+            : const Value.absent(),
+        format: format != null && format.isNotEmpty
+            ? Value(format)
+            : const Value.absent(),
+        spineConfidence: spineConfidence != null
+            ? Value(spineConfidence)
+            : const Value.absent(),
       );
 
       await database.into(database.books).insertOnConflictUpdate(book);
