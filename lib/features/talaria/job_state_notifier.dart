@@ -150,14 +150,14 @@ class JobStateNotifier extends Notifier<JobState> {
         '[JobStateNotifier] Upload successful for retry job ${job.id}:',
       );
       debugPrint('  - Job ID: ${response.jobId}');
-      debugPrint('  - Stream URL: ${response.streamUrl}');
+      debugPrint('  - SSE URL: ${response.sseUrl}');
 
       // Update job to listening state with timestamp
       _updateJob(
         job.id,
         job.copyWith(
           jobId: response.jobId,
-          streamUrl: response.streamUrl,
+          streamUrl: response.sseUrl,
           status: JobStatus.listening,
           sseListeningStartedAt: DateTime.now(),
         ),
@@ -165,7 +165,7 @@ class JobStateNotifier extends Notifier<JobState> {
 
       // Start listening to SSE stream
       // Use the original failedScanJobId for cleanup tracking
-      await _listenToStream(job.id, failedScanJobId, response.streamUrl);
+      await _listenToStream(job.id, failedScanJobId, response.sseUrl);
 
       return true;
     } on DioException catch (e) {
@@ -345,14 +345,14 @@ class JobStateNotifier extends Notifier<JobState> {
 
       debugPrint('[JobStateNotifier] Upload successful for job ${job.id}:');
       debugPrint('  - Job ID: ${response.jobId}');
-      debugPrint('  - Stream URL: ${response.streamUrl}');
+      debugPrint('  - SSE URL: ${response.sseUrl}');
 
       // Update job to listening state with timestamp
       _updateJob(
         job.id,
         job.copyWith(
           jobId: response.jobId,
-          streamUrl: response.streamUrl,
+          streamUrl: response.sseUrl,
           status: JobStatus.listening,
           sseListeningStartedAt: DateTime.now(),
         ),
@@ -373,7 +373,7 @@ class JobStateNotifier extends Notifier<JobState> {
       }
 
       // Start listening to SSE stream
-      await _listenToStream(job.id, response.jobId, response.streamUrl);
+      await _listenToStream(job.id, response.jobId, response.sseUrl);
     } on DioException catch (e) {
       debugPrint('[JobStateNotifier] DioException during upload: ${e.type}');
       await _handleNetworkError(e, job, imagePath);

@@ -1,19 +1,28 @@
 import 'package:dio/dio.dart';
 
 /// Response model for /v3/jobs/scans endpoint
+///
+/// API returns: { success, data: { jobId, authToken, sseUrl, statusUrl }, metadata, _links }
 class ScanJobResponse {
   final String jobId;
-  final String streamUrl;
+  final String sseUrl;
+  final String? authToken;
+  final String? statusUrl;
 
   ScanJobResponse({
     required this.jobId,
-    required this.streamUrl,
+    required this.sseUrl,
+    this.authToken,
+    this.statusUrl,
   });
 
   factory ScanJobResponse.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>;
     return ScanJobResponse(
-      jobId: json['jobId'] as String,
-      streamUrl: json['streamUrl'] as String,
+      jobId: data['jobId'] as String,
+      sseUrl: data['sseUrl'] as String,
+      authToken: data['authToken'] as String?,
+      statusUrl: data['statusUrl'] as String?,
     );
   }
 }
@@ -31,18 +40,19 @@ class TalariaClient {
 
   /// Upload an image for analysis
   ///
-  /// Returns a [ScanJobResponse] containing the jobId and streamUrl for SSE listening.
+  /// Returns a [ScanJobResponse] containing the jobId and sseUrl for SSE listening.
   /// Throws [DioException] on network errors or non-202 responses.
+  ///
+  /// API expects multipart field name `photos[]` with X-Device-ID header.
   ///
   /// [isbnHint] is an optional ISBN detected via barcode scanning that can be passed
   /// as a hint to the backend for faster processing. Backend may ignore this field.
   Future<ScanJobResponse> uploadImage(String imagePath, {String? isbnHint}) async {
     final formFields = <String, dynamic>{
-      'image': await MultipartFile.fromFile(
+      'photos[]': await MultipartFile.fromFile(
         imagePath,
         filename: imagePath.split('/').last,
       ),
-      'device_id': _deviceId,
     };
 
     // Add ISBN hint as multipart form field if available
@@ -69,7 +79,8 @@ class TalariaClient {
   /// Clean up resources for a completed job
   ///
   /// Sends DELETE request to /v3/jobs/scans/{jobId}/cleanup.
-  /// Throws [DioException] on network errors or non-2xx responses.
+  /// Note: This is a no-op on the server (R2 cleanup is automatic).
+  /// Kept for backward compatibility.
   Future<void> cleanupJob(String jobId) async {
     await _dio.delete(
       '/v3/jobs/scans/$jobId/cleanup',

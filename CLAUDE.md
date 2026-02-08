@@ -98,8 +98,8 @@ This app uses **Riverpod 3.x** for all state management:
 ### Data Flow: The Capture Loop
 
 1. **Capture** - User taps shutter → Image saved to temp cache → Background isolate compresses/resizes
-2. **Upload** - Multipart POST to `/v3/jobs/scans` with `X-Device-ID` header
-3. **Listen** - Connect to SSE stream at returned `streamUrl`
+2. **Upload** - Multipart POST to `/v3/jobs/scans` with field `photos[]` and `X-Device-ID` header
+3. **Listen** - Connect to SSE stream at returned `data.sseUrl` (Bearer auth with `data.authToken`)
 4. **Ingest** - SSE events (`progress`, `result`, `complete`, `error`) trigger UI updates and database upserts
 5. **Display** - Library auto-refreshes via Drift's `.watch()` streams
 
@@ -151,9 +151,10 @@ This app uses **Riverpod 3.x** for all state management:
 - `X-Device-ID: <uuid>` on all requests
 
 **Endpoints:**
-- `POST /v3/jobs/scans` - Upload image, returns `{jobId, streamUrl}`
-- `GET /v3/jobs/scans/{jobId}/stream` - SSE stream of job events
-- `DELETE /v3/jobs/scans/{jobId}/cleanup` - Clean up server resources
+- `POST /v3/jobs/scans` - Upload image (field: `photos[]`), returns `{success, data: {jobId, authToken, sseUrl, statusUrl}}`
+- `GET /v3/jobs/scans/{jobId}/stream` - SSE stream of job events (auth via Bearer token)
+- `GET /v3/jobs/scans/{jobId}/results` - Fetch results (?format=lite for reduced payload)
+- `DELETE /v3/jobs/scans/{jobId}/cleanup` - No-op (R2 cleanup is automatic, kept for backward compat)
 
 **SSE Event Types:**
 - `progress` - Analysis progress updates (0.0 - 1.0)

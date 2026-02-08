@@ -33,20 +33,14 @@ void main() {
             expect(options.path, '/v3/jobs/scans');
             expect(options.headers['X-Device-ID'], testDeviceId);
 
-            // Verify FormData contains image and device_id
+            // Verify FormData contains photos[] field
             final formData = options.data as FormData;
-            final fields = formData.fields;
             final files = formData.files;
 
-            expect(
-              fields.any((field) =>
-                  field.key == 'device_id' && field.value == testDeviceId),
-              true,
-            );
-            expect(files.any((file) => file.key == 'image'), true);
+            expect(files.any((file) => file.key == 'photos[]'), true);
 
             return ResponseBody.fromString(
-              '{"jobId": "job-123", "streamUrl": "https://stream.example.com/job-123"}',
+              '{"success": true, "data": {"jobId": "job-123", "sseUrl": "https://stream.example.com/job-123", "authToken": "token-abc", "statusUrl": "https://api.example.com/job-123"}}',
               202,
               headers: {
                 Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -58,7 +52,7 @@ void main() {
         final response = await talariaClient.uploadImage(testFile.path);
 
         expect(response.jobId, 'job-123');
-        expect(response.streamUrl, 'https://stream.example.com/job-123');
+        expect(response.sseUrl, 'https://stream.example.com/job-123');
 
         // Clean up
         await testFile.delete();
@@ -139,14 +133,21 @@ void main() {
   group('ScanJobResponse', () {
     test('should parse JSON correctly', () {
       final json = {
-        'jobId': 'job-123',
-        'streamUrl': 'https://stream.example.com/job-123',
+        'success': true,
+        'data': {
+          'jobId': 'job-123',
+          'sseUrl': 'https://stream.example.com/job-123',
+          'authToken': 'token-abc',
+          'statusUrl': 'https://api.example.com/job-123',
+        },
       };
 
       final response = ScanJobResponse.fromJson(json);
 
       expect(response.jobId, 'job-123');
-      expect(response.streamUrl, 'https://stream.example.com/job-123');
+      expect(response.sseUrl, 'https://stream.example.com/job-123');
+      expect(response.authToken, 'token-abc');
+      expect(response.statusUrl, 'https://api.example.com/job-123');
     });
   });
 }

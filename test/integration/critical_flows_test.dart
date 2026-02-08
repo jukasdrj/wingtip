@@ -160,7 +160,7 @@ class MockTalariaClient extends TalariaClient {
 
     return ScanJobResponse(
       jobId: mockJobId,
-      streamUrl: mockStreamUrl,
+      sseUrl: mockStreamUrl,
     );
   }
 
