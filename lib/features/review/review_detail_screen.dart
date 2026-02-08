@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' show Value;
+import 'package:wingtip/core/theme.dart';
 import 'package:wingtip/data/database.dart';
 import 'package:wingtip/data/database_provider.dart';
 
@@ -120,7 +121,7 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
 
     if (title.isEmpty || author.isEmpty || isbn.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
+        const SnackBar(content: Text('Please fill in all fields'), backgroundColor: AppTheme.borderGray),
       );
       return;
     }
@@ -149,13 +150,13 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Book added to library')));
+        ).showSnackBar(const SnackBar(content: Text('Book added to library'), backgroundColor: AppTheme.borderGray));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error adding book: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error adding book: $e'), backgroundColor: AppTheme.borderGray));
       }
     }
   }
@@ -222,6 +223,7 @@ class _ReviewDetailScreenState extends ConsumerState<ReviewDetailScreen> {
                   TextField(
                     controller: _isbnController,
                     decoration: const InputDecoration(labelText: 'ISBN'),
+                    style: AppTheme.monoStyle(),
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(

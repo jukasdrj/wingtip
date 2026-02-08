@@ -21,6 +21,7 @@ import 'widgets/failed_scan_card.dart' as failed_card;
 import 'widgets/filter_bottom_sheet.dart';
 import 'collections_provider.dart';
 import 'library_statistics_screen.dart';
+import '../../widgets/skeleton_book_card.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -842,11 +843,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   ),
                 );
               },
-              loading: () => const Center(
-                child: CircularProgressIndicator(
-                  color: AppTheme.internationalOrange,
-                ),
-              ),
+              loading: () => const SkeletonGrid(),
               error: (error, stack) => Center(
                 child: Text(
                   'Error loading books',

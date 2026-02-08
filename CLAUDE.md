@@ -318,7 +318,6 @@ final container = ProviderContainer(
 
 **iOS Camera Enhancements:**
 - Night Mode: Auto-enabled in low light conditions (yellow moon indicator)
-- Depth sensing: Uses portrait mode depth for improved spine focus
 - Auto exposure compensation: +0.5 to +1.0 for book spines
 - Focus/Exposure lock: Long-press to lock, swipe up/down to adjust exposure
 - Settings persistence via `CameraSettingsService`

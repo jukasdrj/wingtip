@@ -154,11 +154,6 @@ final booksProvider = StreamProvider<List<Book>>((ref) {
   );
 });
 
-// Legacy provider for backward compatibility
-final allBooksProvider = StreamProvider<List<Book>>((ref) {
-  return ref.watch(booksProvider.future).asStream().asyncExpand((books) => Stream.value(books));
-});
-
 // Select mode notifier
 class SelectModeNotifier extends Notifier<bool> {
   @override
